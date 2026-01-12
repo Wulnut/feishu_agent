@@ -29,28 +29,35 @@
 
 ## 4. 项目结构规范 (Project Structure)
 
+我们要建立一个 **分层清晰、模块化、高内聚低耦合** 的架构。
+
 ### 4.1 目录组织
 
 ```text
 src/
-├── core/           # 单例 Client, 配置中心 (pydantic-settings)
-├── providers/      # 核心层: 能力者模式实现
-│   ├── base.py     # 抽象基类 (Protocol/ABC)
+├── core/           # 基础设施 (Config, Auth, Client)
+│   ├── project_client.py  # 飞书项目专用客户端
+│   ├── client.py          # 通用 SDK 客户端
+│   └── ...
+├── providers/      # 业务逻辑 (Service Layer)
+│   ├── base.py     # 抽象基类
 │   ├── common/     # 通用能力 (IM, Base, Drive)
-│   └── project/    # 飞书项目专用能力 (Items, Fields, Gantt)
+│   └── project/    # 飞书项目模块
+│       ├── api/        # [Data Layer] 纯 API 调用
+│       ├── services/   # [Service Layer] 元数据与配置服务
+│       └── items.py    # [Provider] 业务编排 (待重构)
 ├── schemas/        # 数据模型 (Pydantic), 用于精简 API 返回值
 └── mcp_server.py   # MCP 接口层: 注册 Tool 与 Resource
 ```
 
-### 4.2 结构原则
+### 4.2 分层架构设计
 
-- **分层组织**：按功能或领域划分目录，遵循"关注点分离"原则
-- **命名一致**：使用一致且描述性的目录和文件命名，反映其用途和内容
-- **模块化**：相关功能放在同一模块，减少跨模块依赖
-- **适当嵌套**：避免过深的目录嵌套，一般不超过 3-4 层
-- **资源分类**：区分代码、资源、配置和测试文件
-- **依赖管理**：集中管理依赖，避免多处声明
-- **约定优先**：遵循语言或框架的标准项目结构约定
+| 层级 | 职责 | 关键组件 |
+|------|------|----------|
+| **Interface Layer (MCP)** | 暴露工具给 LLM，处理输入验证 | `mcp_server.py`, `tools/` |
+| **Service Layer (Providers)** | 编排业务逻辑，处理配置与动态映射 | `WorkItemProvider`, `MetadataService` |
+| **Data Layer (Repository/API)** | 纯粹的 API 调用与数据转换 | `ProjectAPI`, `SpaceAPI` |
+| **Infrastructure Layer (Core)** | 底层设施，鉴权，HTTP 客户端 | `ProjectClient`, `Auth`, `Config` |
 
 ### 4.3 OOP 与 Provider 模式
 
@@ -60,7 +67,41 @@ src/
 
 ---
 
-## 5. 通用开发原则 (Development Principles)
+## 5. 开发规划 (Roadmap)
+
+### Phase 1: 基础设施重构 (Infrastructure Refactoring)
+- [ ] **Core**: 完善 `ProjectClient` (Retry, Logging)。
+- [ ] **API Layer**: 将 `src/providers/project/api.py` 拆分为独立模块，覆盖 CRUD 和 Filter 接口。
+- [ ] **Test**: 为 `ProjectClient` 和 API Layer 编写 Mock 测试。
+
+### Phase 2: 元数据服务 (Metadata Service)
+- [ ] **Service**: 实现 `MetadataService`，支持 Project/Type/Field/User 的动态发现与缓存。
+- [ ] **Test**: 编写 `MetadataService` 的单元测试 (Mock API 响应)。
+
+### Phase 3: 业务逻辑层 (Business Logic)
+- [ ] **Provider**: 重构 `WorkItemProvider`，集成 `MetadataService`，实现无硬编码的 CRUD。
+- [ ] **Provider**: 实现高级过滤逻辑 (包含关联字段的客户端过滤)。
+- [ ] **Schema**: 定义完整的 Pydantic 模型。
+- [ ] **Test**: 编写 Provider 的集成测试 (针对真实/Mock环境)。
+
+### Phase 4: MCP 接口层 (Interface)
+- [ ] **Tools**: 将 Provider 方法注册为 MCP Tools。
+- [ ] **Validation**: 在 Tool 层进行输入验证。
+- [ ] **Test**: 测试 MCP Tool 的调用链路。
+
+---
+
+## 6. 测试策略
+
+每个模块必须包含对应的测试：
+
+1.  **Unit Tests**: 针对 Util, Schema, Helper 函数。
+2.  **Mock Tests**: 针对 API Client, Metadata Service（Mock HTTP 响应）。
+3.  **Integration Tests**: 针对 Provider 层，连接真实飞书环境（需配置测试租户 Credentials）。
+
+---
+
+## 7. 通用开发原则 (Development Principles)
 
 - **可测试性**：编写可测试的代码，组件应保持单一职责
 - **DRY 原则**：避免重复代码，提取共用逻辑到单独的函数或类
@@ -75,41 +116,23 @@ src/
 
 ---
 
-## 6. 开发守则 (Development Rules)
+## 8. 开发守则 (Development Rules)
 
-### 6.1 异步优先 (Async First)
+### 8.1 异步优先 (Async First)
 
 * 所有的 API 请求必须使用异步方法
 * 示例: 使用 `client.im.v1.message.acreate()` 而不是 `create()`
 * 处理多个并发请求时，使用 `asyncio.gather()`
 
-### 6.2 错误处理
+### 8.2 错误处理
 
 * 不允许直接抛出飞书 SDK 的原始异常
 * 必须在 Provider 层捕获异常，并返回人类/Agent 可读的中文错误提示
 
-### 6.3 文档注释 (Docstrings)
+### 8.3 文档注释 (Docstrings)
 
 * 每个 `mcp.tool()` 必须包含极其详尽的 Docstring
 * **Docstring 必须描述**: 1. 工具的功能；2. 参数的业务含义；3. 预期返回的结果
-
----
-
-## 7. 演进路线图 (Roadmap)
-
-1. **Stage 1 (Current)**: 飞书项目 MCP 落地，实现工作项 CRUD 自动化
-2. **Stage 2**: 引入 LangGraph 进行逻辑编排 (Workflow)
-3. **Stage 3**: 完整 Agent 化，支持自然语言决策
-
----
-
-## 8. 开发指令速查 (Quick Reference)
-
-> 当开发新功能时，请确保：
-> 1. 检查 `src/core/client.py` 确保单例调用
-> 2. 在 `src/providers/` 下按类别创建新的类
-> 3. 在 `main.py` 中使用 `FastMCP` 注册工具
-> 4. 保持代码符合 Python 3.11 的异步高性能标准
 
 ---
 

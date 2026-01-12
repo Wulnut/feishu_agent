@@ -1,6 +1,6 @@
 import json
 from mcp.server.fastmcp import FastMCP
-from src.providers.project.manager import ProjectManager
+from src.services.issue_service import IssueService
 
 # Initialize FastMCP server
 mcp = FastMCP("Feishu Agent")
@@ -17,9 +17,8 @@ async def get_active_tasks(project_key: str) -> str:
     Returns:
         A JSON string representation of the active tasks (id, name, type).
     """
-    manager = ProjectManager(project_key)
-    tasks = await manager.get_active_tasks()
-    return str(tasks)
+    # 暂时占位，IssueService 尚未实现 filter
+    return "Not implemented yet. Please check IssueService."
 
 
 @mcp.tool()
@@ -49,9 +48,24 @@ async def create_task(
     except Exception:
         return "Error: extra_fields must be a valid JSON string."
 
-    manager = ProjectManager(project_key)
+    # 使用 Service 层，直接传入 project_key
+    service = IssueService(project_key=project_key)
+    
     try:
-        task_id = await manager.create_task(name, type_key, extra_fields=fields_dict)
-        return f"Successfully created task. ID: {task_id}"
+        # Map extra_fields to arguments
+        priority = str(fields_dict.get("Priority") or fields_dict.get("priority") or "")
+        description = str(fields_dict.get("Description") or fields_dict.get("description") or "")
+        assignee = str(fields_dict.get("Assignee") or fields_dict.get("assignee") or "")
+        
+        if not priority: priority = "P2" # Default
+        
+        # Service 层的接口更加业务化
+        result = await service.create_issue(
+            title=name,
+            priority=priority,
+            description=description,
+            assignee=assignee if assignee else None
+        )
+        return result
     except Exception as e:
         return f"Error creating task: {str(e)}"
