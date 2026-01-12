@@ -1,16 +1,24 @@
 import pytest
 import respx
 from httpx import Response
-from src.core.client import ProjectClient
+from src.core.project_client import ProjectClient
 from src.core.config import settings
 
 
 @pytest.mark.asyncio
-async def test_project_client_init_headers():
+async def test_project_client_default_base_url(monkeypatch):
+    """Test that ProjectClient uses the default base URL from settings."""
+    monkeypatch.setattr(settings, "FEISHU_PROJECT_BASE_URL", "https://default.api")
+    client = ProjectClient()
+    assert str(client.client.base_url).rstrip("/") == "https://default.api"
+
+
+@pytest.mark.asyncio
+async def test_project_client_init_headers(monkeypatch):
     """Test that ProjectClient initializes with correct headers from settings."""
     # Patch settings
-    settings.FEISHU_PROJECT_USER_TOKEN = "mock_plugin_token"
-    settings.FEISHU_PROJECT_USER_KEY = "mock_user_key"
+    monkeypatch.setattr(settings, "FEISHU_PROJECT_USER_TOKEN", "mock_plugin_token")
+    monkeypatch.setattr(settings, "FEISHU_PROJECT_USER_KEY", "mock_user_key")
 
     client = ProjectClient()
 

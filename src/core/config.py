@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     LARK_VERIFICATION_TOKEN: str | None = None
 
     # Project specific
+    FEISHU_PROJECT_BASE_URL: str = "https://project.feishu.cn"
     FEISHU_PROJECT_USER_TOKEN: str | None = None  # X-PLUGIN-TOKEN
     FEISHU_PROJECT_USER_KEY: str | None = None  # X-USER-KEY
 

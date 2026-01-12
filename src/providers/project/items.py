@@ -1,6 +1,6 @@
 from typing import List, Dict
 import httpx
-from src.core.client import get_project_client
+from src.core.project_client import get_project_client
 from src.providers.base import Provider
 import logging
 

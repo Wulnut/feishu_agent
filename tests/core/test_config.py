@@ -9,6 +9,7 @@ def test_settings_load_from_env(monkeypatch):
     monkeypatch.setenv("LARK_APP_SECRET", "sec_test_456")
     monkeypatch.setenv("FEISHU_PROJECT_USER_TOKEN", "pt-token-val")
     monkeypatch.setenv("FEISHU_PROJECT_USER_KEY", "uk-key-val")
+    monkeypatch.setenv("FEISHU_PROJECT_BASE_URL", "https://custom.api")
 
     # We pass _env_file=None to ignore the .env file and rely on monkeypatch
     settings = Settings(_env_file=None)
@@ -17,6 +18,7 @@ def test_settings_load_from_env(monkeypatch):
     assert settings.LARK_APP_SECRET == "sec_test_456"
     assert settings.FEISHU_PROJECT_USER_TOKEN == "pt-token-val"
     assert settings.FEISHU_PROJECT_USER_KEY == "uk-key-val"
+    assert settings.FEISHU_PROJECT_BASE_URL == "https://custom.api"
 
 
 def test_settings_defaults():
@@ -25,3 +27,4 @@ def test_settings_defaults():
     env = {"LARK_APP_ID": "dummy", "LARK_APP_SECRET": "dummy"}
     settings = Settings(_env_file=None, **env)
     assert settings.LARK_ENCRYPT_KEY is None
+    assert settings.FEISHU_PROJECT_BASE_URL == "https://project.feishu.cn"

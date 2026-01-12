@@ -1,5 +1,5 @@
 from typing import List, Optional, Any, Dict
-from src.core.client import ProjectClient, get_project_client
+from src.core.project_client import ProjectClient, get_project_client
 from src.schemas.project import BaseResponse, WorkItemListData, WorkItem
 
 
