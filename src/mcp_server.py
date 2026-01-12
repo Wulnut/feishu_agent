@@ -1,3 +1,4 @@
+import json
 from mcp.server.fastmcp import FastMCP
 from src.providers.project.manager import ProjectManager
 
@@ -22,7 +23,12 @@ async def get_active_tasks(project_key: str) -> str:
 
 
 @mcp.tool()
-async def create_task(project_key: str, name: str, type_key: str = "task") -> str:
+async def create_task(
+    project_key: str,
+    name: str,
+    type_key: str = "task",
+    extra_fields: str = "{}",
+) -> str:
     """
     Create a new task in the specified project.
 
@@ -30,13 +36,22 @@ async def create_task(project_key: str, name: str, type_key: str = "task") -> st
         project_key: The unique key of the Feishu Project.
         name: The title/name of the task.
         type_key: The type of work item (default: "task"). Options: "task", "bug", "story".
+        extra_fields: A JSON string of additional fields (e.g. '{"Priority": "High"}').
+                      Human-readable names will be automatically translated.
 
     Returns:
         The ID of the created task.
     """
+    try:
+        fields_dict = json.loads(extra_fields)
+        if not isinstance(fields_dict, dict):
+            return "Error: extra_fields must be a JSON object (dictionary)."
+    except Exception:
+        return "Error: extra_fields must be a valid JSON string."
+
     manager = ProjectManager(project_key)
     try:
-        task_id = await manager.create_task(name, type_key)
+        task_id = await manager.create_task(name, type_key, extra_fields=fields_dict)
         return f"Successfully created task. ID: {task_id}"
     except Exception as e:
         return f"Error creating task: {str(e)}"

@@ -45,6 +45,34 @@ async def test_get_active_tasks(mock_api):
 
 
 @pytest.mark.asyncio
+async def test_get_active_tasks_with_translation(mock_api):
+    # Setup metadata mock
+    mock_metadata = AsyncMock()
+    mock_metadata.get_field_mappings.return_value = {"field_99": "Priority"}
+
+    manager = ProjectManager(
+        project_key="P1", api_client=mock_api, metadata_provider=mock_metadata
+    )
+
+    # Mock item with custom fields
+    item = WorkItem(
+        id=10,
+        name="T1",
+        project_key="P1",
+        work_item_type_key="task",
+        field_value_pairs=[{"field_key": "field_99", "field_value": "High"}],
+    )
+    mock_api.filter_work_items.return_value = BaseResponse(
+        code=0, data=WorkItemListData(data=[item])
+    )
+
+    tasks = await manager.get_active_tasks()
+
+    assert tasks[0]["Priority"] == "High"
+    assert "field_99" not in tasks[0]
+
+
+@pytest.mark.asyncio
 async def test_create_task(mock_api):
     manager = ProjectManager(project_key="TEST_PROJ", api_client=mock_api)
 
@@ -58,6 +86,10 @@ async def test_create_task(mock_api):
 
     # Assertions
     mock_api.create_work_item.assert_called_with(
-        project_key="TEST_PROJ", name="New Task", type_key="story", template_id=None
+        project_key="TEST_PROJ",
+        name="New Task",
+        type_key="story",
+        template_id=None,
+        field_value_pairs=[],
     )
     assert result == 999

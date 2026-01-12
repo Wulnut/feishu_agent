@@ -77,3 +77,32 @@ async def test_create_work_item(respx_mock):
     req_body = json.loads(route.calls.last.request.content)
     assert req_body["name"] == "New Feature"
     assert req_body["work_item_type_key"] == "story"
+
+
+@pytest.mark.asyncio
+async def test_get_project_fields(respx_mock):
+    api = WorkItemAPI()
+    project_key = "TEST_PROJ"
+
+    mock_data = {
+        "code": 0,
+        "msg": "success",
+        "data": [
+            {"field_key": "field_1", "field_name": "Field 1", "field_type_key": "text"}
+        ],
+    }
+
+    route = respx_mock.post(
+        f"https://project.feishu.cn/open_api/{project_key}/field/all"
+    ).mock(return_value=Response(200, json=mock_data))
+
+    resp = await api.get_project_fields(project_key, work_item_type_key="story")
+
+    assert resp.is_success
+    assert len(resp.data) == 1
+    assert resp.data[0].field_key == "field_1"
+
+    import json
+
+    req_body = json.loads(route.calls.last.request.content)
+    assert req_body["work_item_type_key"] == "story"

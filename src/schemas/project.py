@@ -1,4 +1,4 @@
-from typing import List, Optional, Generic, TypeVar, Any
+from typing import List, Optional, Generic, TypeVar, Any, Dict
 from pydantic import BaseModel, Field
 
 T = TypeVar("T")
@@ -10,12 +10,28 @@ class Pagination(BaseModel):
     page_size: int = 20
 
 
+class FieldOption(BaseModel):
+    label: str
+    value: str
+
+
+class FieldDefinition(BaseModel):
+    field_key: str
+    field_name: str
+    field_alias: Optional[str] = None
+    field_type_key: str
+    options: List[FieldOption] = Field(default_factory=list)
+
+    model_config = {"extra": "ignore"}
+
+
 class WorkItem(BaseModel):
     id: int
     name: str
     project_key: str
     work_item_type_key: str
     template_id: Optional[int] = None
+    field_value_pairs: List[Dict[str, Any]] = Field(default_factory=list)
 
     # Allow extra fields for forward compatibility
     model_config = {"extra": "ignore"}

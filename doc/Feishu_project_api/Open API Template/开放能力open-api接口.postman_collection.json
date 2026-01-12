@@ -1,0 +1,3691 @@
+{
+	"info": {
+		"_postman_id": "6dae29e0-9639-4e81-b719-b662553af900",
+		"name": "开放能力open-api接口",
+		"description": "## 概述\n\nOpen API提供了获取和操作（等同大部分飞书项目页面操作）数据的能力。通过该能力，开发者可以根据自己的使用场景，使自己的场景业务更加丰富流畅，也可加深开发者与已使用工具之间的联动。\n\n#### 域名\n\n考虑平台间使用域名有差异，请根据实际访问域名来调用 API，如下图示获取平台域名。  \n举例:当前使用飞书项目的域名为 [project.feishu.cn](http://project.feishu.cn/)，则下方{Base URL}替换为 [project.feishu.cn](http://project.feishu.cn/)。\n\n<img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/f892b8fbef7d43f68de2ea2ff66c28d2~tplv-goo7wpa0wc-image.image\" alt=\"Image\">\n\n#### 请求路径参数\n\n本文档的说明中，路径中带有冒号 “:” 的部分为路径参数，如下方所示：\n\n``` Plain\nhttps://{Base URL}/open_api/:project_key/business/all\n                          |-- 路径参数 --|\n\n ```\n\n示例：\n\n``` Plain\nhttps://{Base URL}/open_api/projectkeyisme/business/all\n                           |-- 路径参数 --|\n\n ```\n\n以上参数 project_Key 的值为 projectkeyisme\n\n#### 请求header\n\n| **字段** | **值** | **备注** |\n| --- | --- | --- |\n| Content-Type | application/json | 必须 |\n| X-PLUGIN-TOKEN | 用户在开放平台中获取的Token，可选以下两种凭证：  <br>  <br>1\\. 插件身份凭证（plugin_token），需要配合X-USER-KEY使用  <br>2\\. 用户身份凭证（user_plugin_token）  <br>  <br>了解如何获取可参考：[获取访问凭证](https://project.feishu.cn/b/helpcenter/1p8d7djs/4id4bvnf) | 必须 |\n| X-USER-KEY | 当选择使用插件身份凭证时，需要选择指定接口调用的用户 user_key，user_key 可双击用户头像获取  <br>  <br><br><img src=\"https://p1-hera.byteimg.com/tos-cn-i-jbbdkfciu3/66385fd66d6448b781317181fa1a4186~tplv-jbbdkfciu3-image:0:0.image\" alt=\"\"> | 可选 |\n| X-IDEM-UUID | 写类型接口的幂等串，可以不设置，设置后会进行同一个 X-PLUGIN-TOKEN 下同一接口的幂等判断。 | 可选 |\n\n## 流程简介\n\n<img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/089f377b03944288bcb9d195e510cc77~tplv-goo7wpa0wc-image.image\" width=\"522\" height=\"838\">\n\n#### 创建插件\n\n| 1\\. 网站左下角，点击进入开发者后台 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/ae79744d478a483f9aab742039a2da4b~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| --- | --- |\n| 2\\. 管理已创建插件或按需创建插件 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/55200cc7f07f4d97baa32cfeae68f3aa~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| 3\\. 完成创建，我的插件中展现新创建的插件，如图“xx插件” | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/481ea8086c034edeb85026051130c075~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n\n#### 插件数据授权\n\n| 1\\. 进入开发者后台，从「我的插件」，进入指定插件管理页 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/c2acbd2131b448e2ac8fd7832f8849bc~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| --- | --- |\n| 2\\. 点击左侧菜单「权限管理」，进入页面。可列表点击快速获取单个权限或选中并批量获取多个权限 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/1ba182555fb14922aa586da7621d5004~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n\n#### 插件API开发调试（推荐使用虚拟token）\n\n| 1\\. 开发调试阶段，插件未安装，可对虚拟token可操作的数据范围进行选择（**虚拟token下接口权限变更立即生效**） | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/fe0f026e0d814b33999dbf86cdc459ec~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| --- | --- |\n| 2\\. 此时已完成插件开发准备，进入开发调试阶段 | 进行开发调试 |\n| 3\\. 开发调试完成，即将进入插件发布阶段（**注意：开发调试完成，上线时更换token获取方式为正式token方式）** | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/5c46221ece244b70b3378edd85b4daf7~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n\n#### 插件发布\n\n| 1\\. 进入开发者后台，点击进入「插件发布」菜单，可查看当前插件版本信息，并进行管理 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/16bb1207b74f4cbcab0e032f35db760f~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| --- | --- |\n| 2\\. 点击右上方「创建版本」，输入信息并完成版本创建（**注意：每次更新权限都需要重新发布插件版本才能生效**） | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/926b340421d3495ebe62ec49684fee42~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| 3\\. 插件版本管理和发布列表，点击「申请发布」，进行插件版本发布 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/1b0e70bd46494ee3847e441b64866d94~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| 4\\. 新的版本完成发布，现在可供用户空间进行安装和使用 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/a7fc1e82587b474a977e1d7188d09ccd~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n\n#### 安装插件\n\n| 1\\. 在空间进入「空间配置」，选中「插件管理」，显示已安装插件列表 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/93906d6d4be1496489d3042e5aef34d8~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| --- | --- |\n| 2\\. 点击右上方「添加插件」，搜索目标插件 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/969e6713148547caa16a91c53b5c5e6d~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| 3\\. 插件获取权限确认后，完成插件安装 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/8061a63c532749ae8cf198d60ba238af~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| 4\\. 返回插件管理（按需完成插件配置） | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/5f6bcd074ae94f0b9246780a19774ddc~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| 5\\. 插件安装配置完成 |  |\n\n#### 插件运行(使用正式token)\n\n| 1\\. 插件进行运行状态，如图示例：插件「xx插件」进行了工作项的创建操作，操作记录体现了来源插件信息 | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/7e1641ecbbca4cd1bb9fa31d0b7bb60e~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| --- | --- |\n\n## 通用说明\n\n##### 名词解释\n\n| **中文名词** | **英文名词** | **描述** |\n| --- | --- | --- |\n| 空间域名 | simple_name | <img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/398d818354df439da52279f9637f3fec~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| 字段ID | field_key | <img src=\"https://p1-hera.byteimg.com/tos-cn-i-jbbdkfciu3/fa5ba5427aa448d8be69bce8bebe5a81~tplv-jbbdkfciu3-image:0:0.image\" alt=\"\"> |\n| 工作项实例 | instance | 工作项实例是一个具体的事例，例如，一个已经创建的需求、缺陷、项目等  <br>  <br><br><img src=\"https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/45c116a5f81948cf96017d914f0dca04~tplv-goo7wpa0wc-image.image\" alt=\"\"> |\n| 实例和配置 |  | API中接口一般可分为配置和实例两类，开发者容易产生混淆  <br>配置侧：一般指在Meego前端空间管理员可见的“空间配置”模块可进行的操作，如工作项配置、流程配置、空间关联等分类下的API  <br>实例侧：一般指对具体的事例进行操作，如工作项列表、工作项详情等分类下的API |\n\n##### 频控\n\nOpen API 接口对每个 Token 调用单个接口限制了 15 QPS 的访问限制，请合理设计调用逻辑。\n\n##### 错误返回格式\n\n``` JSON\n{ // 数据结构会随着开放平台演进而新增字段， 请提前做好预留\n  \"err\": { // 对部分错误会在这里进行更详细的错误描述，可协助日志记录和问题反馈\n    \"code\": 1,  // 更详细错误对应的错误码，可选\n    \"msg\": \"\"   // 更详细的错误描述，可选\n  },\n  \"err_msg\": \"\",  //  错误信息，必选\n  \"err_code\": 0   //  错误码，必选\n}\n\n ```\n\n##### 错误码\n\n错误码文档对非 500 类错误码给出了可能的错误原因和自行排查的建议，请优先自行排查。具体可以参考：[Open API 错误码](https:///1p8d7djs/5aueo3jr)  \n类似参考如下：\n\n<img src=\"https://p1-hera.byteimg.com/tos-cn-i-jbbdkfciu3/2a990fe6ccd84c6791d04ce01a3f9adf~tplv-jbbdkfciu3-image:0:0.image\" alt=\"Image\">\n\n##### 网关错误\n\n当输入参数不符合要求，会触发网关错误，请自查请求参数格式，错误如下所示：\n\n<img src=\"https://p1-hera.byteimg.com/tos-cn-i-jbbdkfciu3/e56b0668991d4de9ba1ed28d5aa62d49~tplv-jbbdkfciu3-image:0:0.image\" alt=\"Image\">\n\n##### 兼容性说明\n\n随业务场景迭代， API会按需增加新的字段/结构，消费方需能够忽略未识别的字段而不会影响其正常处理。\n\n##### 限流说明\n\n在特定的时间段，平台会迎来大量的用户访问、自动化和API调用，导致系统资源紧张。为了保障平台的整体稳定性和服务质量，平台通过全局限流的方式和先到先服务的原则保障用户体验，对超出限制的请求暂时返回错误提示，您的插件需要进行适当的处理规避限流的影响。",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "34330300"
+	},
+	"item": [
+		{
+			"name": "插件相关",
+			"item": [
+				{
+					"name": "获取plugin_token",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"plugin_id\": \"{{plugin_id}}\",\n  \"plugin_secret\": \"{{plugin_secret}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/open_api/authen/plugin_token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"open_api",
+								"authen",
+								"plugin_token"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "获取code",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "cookie",
+								"value": "{{cookie}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"plugin_id\": \"{{plugin_id}}\",\n  \"state\": \"111\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/open_api/authen/auth_code",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"open_api",
+								"authen",
+								"auth_code"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "获取user_plugin_token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Plugin-Token",
+								"value": "{{plugin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"{{code}}\",\n  \"grant_type\": \"authorization_code\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/open_api/authen/user_plugin_token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"open_api",
+								"authen",
+								"user_plugin_token"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "刷新token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Plugin-Token",
+								"value": "{{plugin_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"{{refresh_token}}\",\n  \"type\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/open_api/authen/refresh_token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"open_api",
+								"authen",
+								"refresh_token"
+							]
+						}
+					},
+					"response": []
+				}
+		]},
+		{
+			"name": "附件",
+			"item": [
+				{
+					"name": "添加附件",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-PLUGIN-TOKEN",
+								"value": "{{plugin_token}}"
+							},
+							{
+								"key": "X-USER-KEY",
+								"value": "{{user_key}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/Users/Downloads/20240527-174010.mp4"
+								},
+								{
+									"key": "field_key",
+									"value": "field_key",
+									"type": "text"
+								},
+								{
+									"key": "field_alias",
+									"value": "field_alias",
+									"type": "text",
+									"disabled": true
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/open_api/:project_key/work_item/story/:work_item_id/file/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"open_api",
+								":project_key",
+								"work_item",
+								"story",
+								":work_item_id",
+								"file",
+								"upload"
+							],
+							"variable": [
+								{
+									"key": "project_key",
+									"value": ""
+								},
+								{
+									"key": "work_item_id",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "文件上传",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-PLUGIN-TOKEN",
+								"value": "{{plugin_token}}"
+							},
+							{
+								"key": "X-USER-KEY",
+								"value": "{{user_key}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/Users/bytedance/Downloads/20240527-174010.mp4"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/open_api/:project_key/file/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"open_api",
+								":project_key",
+								"file",
+								"upload"
+							],
+							"variable": [
+								{
+									"key": "project_key",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "下载附件",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-PLUGIN-TOKEN",
+								"value": "{{plugin_token}}"
+							},
+							{
+								"key": "X-USER-KEY",
+								"value": "{{user_key}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"uuid\":\"89ab78a4-0a88-4603-8db4-7c1e63710284\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/open_api/:project_key/work_item/story/:work_item_id/file/download",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"open_api",
+								":project_key",
+								"work_item",
+								"story",
+								":work_item_id",
+								"file",
+								"download"
+							],
+							"variable": [
+								{
+									"key": "work_item_id",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "删除附件",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-PLUGIN-TOKEN",
+								"value": "{{plugin_token}}"
+							},
+							{
+								"key": "X-USER-KEY",
+								"value": "{{user_key}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"project_key\":\"\",\n    \"work_item_id\":\"\",\n    \"field_key\":\"\",\n    // \"field_alias\":,\n    \"uuids\":[]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/open_api/file/delete",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"open_api",
+								"file",
+								"delete"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		
+		
+				{
+					"name": "空间",
+					"item": [
+						
+							{"name": "获取空间列表",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"user_key\": \"\",\n\t\"tenant_group_id\": 0,\n\t\"asset_key\": \"\",\n\t\"order\": [\"\"]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/projects",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										"projects"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "获取空间详情",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"project_keys\": [\"\"],\n\t\"user_key\": \"\",\n\t\"simple_names\": [\"\"],\n\t\"tenant_group_id\": 0\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/projects/detail",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										"projects", 
+										"detail"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			,
+				{
+					"name": "配置",
+					"item": [
+						
+								{
+								"name": "空间配置",
+								"item": [
+								
+											{"name": "获取空间下业务线详情",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/business/all",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"business", 
+														"all"
+													]
+													
+												}
+											},
+											"response": []
+										},
+											{"name": "获取空间下工作项类型",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/all-types",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														"all-types"
+													]
+													
+												}
+											},
+											"response": []
+										}
+								]},
+							
+								{
+								"name": "工作项配置",
+								"item": [
+								
+											{"name": "获取工作项基础信息配置",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/type/:work_item_type_key",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														"type", 
+														":work_item_type_key"
+													]
+													
+												}
+											},
+											"response": []
+										},
+											{"name": "更新工作项基础信息配置",
+											"request": {
+												"method": "PUT",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"description\": \"\",\n\t\"is_disabled\": true,\n\t\"is_pinned\": true,\n\t\"enable_schedule\": true,\n\t\"schedule_field_key\": \"\",\n\t\"estimate_point_field_key\": \"\",\n\t\"actual_work_time_field_key\": \"\",\n\t\"belong_role_keys\": [\"\"],\n\t\"actual_work_time_switch\": true\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/type/:work_item_type_key",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														"type", 
+														":work_item_type_key"
+													]
+												}
+											},
+											"response": []
+										},
+											{
+												"name": "字段配置",
+												"item": [
+													
+															{"name": "获取字段信息",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"work_item_type_key\": \"\"\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/:project_key/field/all",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		":project_key", 
+																		"field", 
+																		"all"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "创建自定义字段",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"field_name\": \"\",\n\t\"field_type_key\": \"\",\n\t\"value_type\": 0,\n\t\"reference_work_item_type_key\": \"\",\n\t\"reference_field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"free_add\": 0,\n\t\"work_item_relation_uuid\": \"\",\n\t\"default_value\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"authorized_roles\": [\"\"],\n\t\"is_multi\": true,\n\t\"format\": true,\n\t\"related_field_extra_display_infos\": [{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"display_field_keys\": [\"\"],\n\t\"display_role_keys\": [\"\"],\n\t\"display_controls\": [\"\"]\n}],\n\t\"team_option\": {\n\t\"team_data_scopes\": [{\n\t\"team_id\": \"\",\n\t\"cascade\": true\n}],\n\t\"team_mode\": \"\"\n},\n\t\"parent_field_key\": \"\",\n\t\"number_config\": {\n\t\"scaling_ratio\": \"\",\n\t\"display_digits\": 0,\n\t\"symbol_setting\": {\n\t\"display\": \"\",\n\t\"value\": \"\",\n\t\"layout\": \"\"\n},\n\t\"thousandth\": true\n}\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/:project_key/field/:work_item_type_key/create",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		":project_key", 
+																		"field", 
+																		":work_item_type_key", 
+																		"create"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "更新自定义字段",
+															"request": {
+																"method": "PUT",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"field_name\": \"\",\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"free_add\": 0,\n\t\"work_item_relation_uuid\": \"\",\n\t\"default_value\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"authorized_roles\": [\"\"],\n\t\"related_field_extra_display_infos\": [{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"display_field_keys\": [\"\"],\n\t\"display_role_keys\": [\"\"],\n\t\"display_controls\": [\"\"]\n}],\n\t\"team_option\": {\n\t\"team_data_scopes\": [{\n\t\"team_id\": \"\",\n\t\"cascade\": true\n}],\n\t\"team_mode\": \"\"\n},\n\t\"number_config\": {\n\t\"scaling_ratio\": \"\",\n\t\"display_digits\": 0,\n\t\"symbol_setting\": {\n\t\"display\": \"\",\n\t\"value\": \"\",\n\t\"layout\": \"\"\n},\n\t\"thousandth\": true\n}\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/:project_key/field/:work_item_type_key",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		":project_key", 
+																		"field", 
+																		":work_item_type_key"
+																	]
+																}
+															},
+															"response": []
+														}
+												]},
+										
+											{
+												"name": "工作项关系配置",
+												"item": [
+													
+															{"name": "获取工作项关系列表",
+															"request": {
+																"method": "GET",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"url": {
+																	"raw": "{{base_url}}/open_api/:project_key/work_item/relation",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		":project_key", 
+																		"work_item", 
+																		"relation"
+																	]
+																	
+																}
+															},
+															"response": []
+														},
+															{"name": "新增工作项关系",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"name\": \"\",\n\t\"relation_details\": [{\n\t\"work_item_type_key\": \"\",\n\t\"work_item_type_name\": \"\",\n\t\"project_key\": \"\",\n\t\"project_name\": \"\"\n}]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/relation/create",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"relation", 
+																		"create"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "更新工作项关系",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"relation_id\": \"\",\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"name\": \"\",\n\t\"relation_details\": [{\n\t\"work_item_type_key\": \"\",\n\t\"work_item_type_name\": \"\",\n\t\"project_key\": \"\",\n\t\"project_name\": \"\"\n}]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/relation/update",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"relation", 
+																		"update"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "删除工作项关系",
+															"request": {
+																"method": "DELETE",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"relation_id\": \"\",\n\t\"project_key\": \"\"\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/relation/delete",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"relation", 
+																		"delete"
+																	]
+																}
+															},
+															"response": []
+														}
+												]}
+										
+								]},
+							
+								{
+								"name": "流程配置",
+								"item": [
+								
+											{"name": "获取工作项下的流程模板列表",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/template_list/:work_item_type_key",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"template_list", 
+														":work_item_type_key"
+													]
+													
+												}
+											},
+											"response": []
+										},
+											{"name": "获取流程模板配置详情",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/template_detail/:template_id",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"template_detail", 
+														":template_id"
+													]
+													
+												}
+											},
+											"response": []
+										},
+											{"name": "新增流程模板",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"template_name\": \"\",\n\t\"copy_template_id\": 0\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/template/v2/create_template",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"template", 
+														"v2", 
+														"create_template"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "更新流程模板",
+											"request": {
+												"method": "PUT",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"project_key\": \"\",\n\t\"template_id\": 0,\n\t\"workflow_confs\": [{\n\t\"state_key\": \"\",\n\t\"name\": \"\",\n\t\"tags\": [\"\"],\n\t\"owner_usage_mode\": 0,\n\t\"owner_roles\": [\"\"],\n\t\"owners\": [\"\"],\n\t\"need_schedule\": true,\n\t\"different_schedule\": true,\n\t\"visibility_usage_mode\": 0,\n\t\"deletable\": true,\n\t\"deletable_operation_role\": [\"\"],\n\t\"pass_mode\": 0,\n\t\"is_limit_node\": true,\n\t\"done_operation_role\": [\"\"],\n\t\"done_schedule\": true,\n\t\"done_allocate_owner\": true,\n\t\"action\": 0,\n\t\"pre_node_state_key\": [\"\"],\n\t\"completion_tips\": \"\",\n\t\"task_confs\": [{\n\t\"action\": 0,\n\t\"name\": \"\",\n\t\"id\": \"\",\n\t\"deliverable_field_id\": \"\",\n\t\"pass_mode\": 0,\n\t\"node_pass_required_mode\": 0\n}],\n\t\"belong_status\": \"\",\n\t\"done_actual_point\": true,\n\t\"is_milestone\": true,\n\t\"done_finish_time\": true,\n\t\"fields\": [{\n\t\"is_required\": 0,\n\t\"is_visibility\": 0,\n\t\"role_assign\": [{\n\t\"role\": \"\",\n\t\"name\": \"\",\n\t\"default_appear\": 0,\n\t\"deletable\": 0,\n\t\"member_assign\": 0,\n\t\"members\": [\"\"]\n}],\n\t\"field_name\": \"\",\n\t\"field_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"field_type_key\": \"\",\n\t\"default_value\": {\n\t\"default_appear\": 0,\n\t\"value\": \"\"\n},\n\t\"options\": [{\n\t\"label\": \"\",\n\t\"value\": \"\",\n\t\"is_disabled\": 0,\n\t\"is_visibility\": 0,\n\t\"children\": [{}]\n}],\n\t\"compound_fields\": [{}],\n\t\"is_validity\": 0,\n\t\"label\": \"\",\n\t\"work_item_relation\": {\n\t\"id\": \"\",\n\t\"name\": \"\",\n\t\"disabled\": true,\n\t\"work_item_type_key\": \"\",\n\t\"work_item_type_name\": \"\",\n\t\"relation_details\": [{\n\t\"work_item_type_key\": \"\",\n\t\"work_item_type_name\": \"\",\n\t\"project_key\": \"\",\n\t\"project_name\": \"\"\n}],\n\t\"relation_type\": 0\n},\n\t\"field_uuid\": \"\",\n\t\"free_add\": true,\n\t\"field_tips\": \"\",\n\t\"sub_type_level_mode\": \"\",\n\t\"sub_type_level_class\": 0,\n\t\"editable_personnel_scope\": {\n\t\"editable_personnel_range_type\": \"\",\n\t\"editable_roles\": [\"\"]\n}\n}],\n\t\"sub_work_items\": [{\n\t\"name\": \"\",\n\t\"relation_uuid\": \"\",\n\t\"relation_name\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"work_item_type_name\": \"\"\n}],\n\t\"sub_tasks\": [{\n\t\"name\": \"\",\n\t\"owner_usage_mode\": 0,\n\t\"owner_roles\": [\"\"],\n\t\"owners\": [\"\"]\n}]\n}],\n\t\"state_flow_confs\": [{\n\t\"state_key\": \"\",\n\t\"name\": \"\",\n\t\"state_type\": 0,\n\t\"authorized_roles\": [\"\"],\n\t\"confirm_form_list\": [{\n\t\"action\": 0,\n\t\"state_key\": \"\"\n}],\n\t\"action\": 0\n}]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/template/v2/update_template",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"template", 
+														"v2", 
+														"update_template"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "删除流程模板",
+											"request": {
+												"method": "DELETE",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/template/v2/delete_template/:project_key/:template_id",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"template", 
+														"v2", 
+														"delete_template", 
+														":project_key", 
+														":template_id"
+													]
+												}
+											},
+											"response": []
+										}
+								]},
+							
+								{
+								"name": "角色与人员配置",
+								"item": [
+								
+											{"name": "获取流程角色配置详情",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/flow_roles/:work_item_type_key",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"flow_roles", 
+														":work_item_type_key"
+													]
+													
+												}
+											},
+											"response": []
+										}
+								]}
+							
+					]
+				}
+			,
+				{
+					"name": "用户",
+					"item": [
+						
+								{
+								"name": "获取用户信息",
+								"item": [
+								
+											{"name": "获取空间下团队成员",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/teams/all",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"teams", 
+														"all"
+													]
+													
+												}
+											},
+											"response": []
+										},
+											{"name": "获取用户详情",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"user_keys\": [\"\"],\n\t\"out_ids\": [\"\"],\n\t\"emails\": [\"\"],\n\t\"tenant_key\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/user/query",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"user", 
+														"query"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "搜索租户内的用户列表",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"query\": \"\",\n\t\"project_key\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/user/search",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"user", 
+														"search"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "查询用户组成员",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"user_group_type\": \"\",\n\t\"user_group_ids\": [\"\"],\n\t\"page_num\": 1,\n\t\"page_size\": 10\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/user_groups/members/page",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"user_groups", 
+														"members", 
+														"page"
+													]
+												}
+											},
+											"response": []
+										}
+								]},
+							
+								{
+								"name": "更新用户信息",
+								"item": [
+								
+											{"name": "创建自定义用户组",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"name\": \"\",\n\t\"users\": [\"\"]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/user_group",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"user_group"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "更新用户组成员",
+											"request": {
+												"method": "PATCH",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"user_group_type\": \"\",\n\t\"user_group_id\": \"\",\n\t\"add_users\": [\"\"],\n\t\"delete_users\": [\"\"],\n\t\"replace_users\": [\"\"]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/user_group/members",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"user_group", 
+														"members"
+													]
+												}
+											},
+											"response": []
+										}
+								]}
+							
+					]
+				}
+			,
+				{
+					"name": "工作项",
+					"item": [
+						
+								{
+								"name": "空间关联",
+								"item": [
+								
+											{"name": "获取空间关联规则列表",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"remote_projects\": [\"\"]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/relation/rules",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"relation", 
+														"rules"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取空间关联下的关联工作项实例列表",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"relation_rule_id\": \"\",\n\t\"relation_work_item_id\": 0,\n\t\"relation_work_item_type_key\": \"\",\n\t\"relation_project_key\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/relation/:work_item_type_key/:work_item_id/work_item_list",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"relation", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"work_item_list"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "绑定空间关联的关联工作项实例",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"relation_rule_id\": \"\",\n\t\"instances\": [{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"work_item_id\": 0,\n\t\"chat_group_merge\": 0\n}]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/relation/:work_item_type_key/:work_item_id/batch_bind",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"relation", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"batch_bind"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "解绑空间关联的关联工作项实例",
+											"request": {
+												"method": "DELETE",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"relation_rule_id\": \"\",\n\t\"relation_work_item_id\": 0\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/relation/:work_item_type_key/:work_item_id",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"relation", 
+														":work_item_type_key", 
+														":work_item_id"
+													]
+												}
+											},
+											"response": []
+										}
+								]},
+							
+								{
+								"name": "获取工作项列表",
+								"item": [
+								
+											{"name": "获取指定的工作项列表（单空间）",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"work_item_name\": \"\",\n\t\"user_keys\": [\"\"],\n\t\"work_item_ids\": [0],\n\t\"work_item_type_keys\": [\"\"],\n\t\"created_at\": {\n\t\"start\": 0,\n\t\"end\": 0\n},\n\t\"updated_at\": {\n\t\"start\": 0,\n\t\"end\": 0\n},\n\t\"sub_stages\": [\"\"],\n\t\"businesses\": [\"\"],\n\t\"priorities\": [\"\"],\n\t\"tags\": [\"\"],\n\t\"page_num\": 1,\n\t\"page_size\": 10,\n\t\"work_item_status\": [{\n\t\"state_key\": \"\",\n\t\"is_archived_state\": true,\n\t\"is_init_state\": true,\n\t\"updated_at\": 1654063482000,\n\t\"updated_by\": \"\",\n\t\"history\": [{}]\n}],\n\t\"expand\": {\n\t\"need_workflow\": true,\n\t\"relation_fields_detail\": true,\n\t\"need_multi_text\": true,\n\t\"need_user_detail\": true,\n\t\"need_sub_task_parent\": true\n},\n\t\"search_id\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/filter",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														"filter"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取指定的工作项列表（跨空间）",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"project_keys\": [\"\"],\n\t\"search_user\": {\n\t\"user_keys\": [\"\"],\n\t\"field_key\": \"\",\n\t\"role\": \"\"\n},\n\t\"work_item_type_key\": \"\",\n\t\"created_at\": {\n\t\"start\": 0,\n\t\"end\": 0\n},\n\t\"updated_at\": {\n\t\"start\": 0,\n\t\"end\": 0\n},\n\t\"work_item_status\": [{\n\t\"state_key\": \"\",\n\t\"is_archived_state\": true,\n\t\"is_init_state\": true,\n\t\"updated_at\": 1654063482000,\n\t\"updated_by\": \"\",\n\t\"history\": [{}]\n}],\n\t\"work_item_name\": \"\",\n\t\"page_num\": 1,\n\t\"page_size\": 10,\n\t\"tenant_group_id\": 0,\n\t\"work_item_ids\": [0],\n\t\"businesses\": [\"\"],\n\t\"priorities\": [\"\"],\n\t\"tags\": [\"\"],\n\t\"simple_names\": [\"\"],\n\t\"template_ids\": [0],\n\t\"expand\": {\n\t\"need_workflow\": true,\n\t\"relation_fields_detail\": true,\n\t\"need_multi_text\": true,\n\t\"need_user_detail\": true,\n\t\"need_sub_task_parent\": true\n}\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/work_items/filter_across_project",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"work_items", 
+														"filter_across_project"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取指定的工作项列表（单空间-复杂传参）",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"search_group\": {\n\t\"search_params\": [{\n\t\"param_key\": \"\",\n\t\"value\": \"\",\n\t\"operator\": \"\",\n\t\"pre_operator\": \"\",\n\t\"value_search_groups\": {}\n}],\n\t\"conjunction\": \"\",\n\t\"search_groups\": [{}]\n},\n\t\"page_num\": 1,\n\t\"page_size\": 10,\n\t\"fields\": [\"\"],\n\t\"expand\": {\n\t\"need_workflow\": true,\n\t\"relation_fields_detail\": true,\n\t\"need_multi_text\": true,\n\t\"need_user_detail\": true,\n\t\"need_sub_task_parent\": true\n}\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/search/params",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														"search", 
+														"params"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取指定的工作项列表（全局搜索）",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"project_keys\": [\"\"],\n\t\"query_type\": \"\",\n\t\"query\": \"\",\n\t\"query_sub_type\": [\"\"],\n\t\"page_size\": 10,\n\t\"page_num\": 1,\n\t\"simple_names\": [\"\"]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/compositive_search",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"compositive_search"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取指定的关联工作项列表（单空间）",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"relation_work_item_type_key\": \"\",\n\t\"relation_key\": \"\",\n\t\"page_num\": 1,\n\t\"page_size\": 10,\n\t\"relation_type\": 0,\n\t\"expand\": {\n\t\"need_workflow\": true,\n\t\"relation_fields_detail\": true,\n\t\"need_multi_text\": true,\n\t\"need_user_detail\": true,\n\t\"need_sub_task_parent\": true,\n\t\"need_union_deliverable\": true,\n\t\"need_wbs_relation_chain_entity\": true,\n\t\"need_wbs_relation_chain_path\": true,\n\t\"need_group_uuid_for_compound\": true\n}\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/search_by_relation",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"search_by_relation"
+													]
+												}
+											},
+											"response": []
+										}
+								]},
+							
+								{
+								"name": "工作项实例读写",
+								"item": [
+								
+											{"name": "获取工作项详情",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"work_item_ids\": [0],\n\t\"fields\": [\"\"],\n\t\"expand\": {\n\t\"need_workflow\": true,\n\t\"relation_fields_detail\": true,\n\t\"need_multi_text\": true,\n\t\"need_user_detail\": true,\n\t\"need_sub_task_parent\": true,\n\t\"need_union_deliverable\": true,\n\t\"need_wbs_relation_chain_entity\": true,\n\t\"need_wbs_relation_chain_path\": true,\n\t\"need_group_uuid_for_compound\": true\n}\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/query",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														"query"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取创建工作项元数据",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/meta",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														"meta"
+													]
+													
+												}
+											},
+											"response": []
+										},
+											{"name": "创建工作项",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"work_item_type_key\": \"\",\n\t\"field_value_pairs\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}],\n\t\"template_id\": 0,\n\t\"name\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/create",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														"create"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "更新工作项",
+											"request": {
+												"method": "PUT",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"update_fields\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "批量更新工作项字段值",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"work_item_ids\": [0],\n\t\"update_mode\": \"\",\n\t\"field_key\": \"\",\n\t\"before_field_value\": \"\",\n\t\"after_field_value\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/work_item/batch_update",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"work_item", 
+														"batch_update"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "交付物信息批量查询（WBS）",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_ids\": [0]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/work_item/deliverable/batch_query",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"work_item", 
+														"deliverable", 
+														"batch_query"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取批量更新处理进度",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/task_result?task_id=string",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"task_result"
+													]
+													
+												}
+											},
+											"response": []
+										},
+											{"name": "删除工作项",
+											"request": {
+												"method": "DELETE",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "终止/恢复工作项",
+											"request": {
+												"method": "PUT",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"is_aborted\": true,\n\t\"reason\": \"\",\n\t\"reason_option\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/abort",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"abort"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取工作项操作记录",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_ids\": [0],\n\t\"start_from\": \"\",\n\t\"operator\": [\"\"],\n\t\"operator_type\": [\"\"],\n\t\"source_type\": [\"\"],\n\t\"source\": [\"\"],\n\t\"operation_type\": [\"\"],\n\t\"start\": 0,\n\t\"end\": 0,\n\t\"op_record_module\": [\"\"],\n\t\"page_size\": 10\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/op_record/work_item/list",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"op_record", 
+														"work_item", 
+														"list"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "工作项冻结/解冻",
+											"request": {
+												"method": "PUT",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"work_item_id\": 0,\n\t\"is_frozen\": true,\n\t\"project_key\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/work_item/freeze",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"work_item", 
+														"freeze"
+													]
+												}
+											},
+											"response": []
+										},
+											{
+												"name": "评审管理",
+												"item": [
+													
+															{"name": "批量查询评审意见、评审结论",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_id\": 0,\n\t\"node_ids\": [\"\"]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/finished/batch_query",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"finished", 
+																		"batch_query"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "修改评审结论和评审意见",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_id\": 0,\n\t\"node_id\": \"\",\n\t\"opinion\": \"\",\n\t\"finished_conclusion_option_key\": \"\",\n\t\"operation_type\": \"\",\n\t\"reset\": true\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/finished/update",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"finished", 
+																		"update"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "评审结论标签值查询",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_id\": 0,\n\t\"node_ids\": [\"\"]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/finished/query_conclusion_option",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"finished", 
+																		"query_conclusion_option"
+																	]
+																}
+															},
+															"response": []
+														}
+												]},
+										
+											{
+												"name": "工作项工时",
+												"item": [
+													
+															{"name": "获取工作项的工时记录列表",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"work_item_id\": 0,\n\t\"page_num\": 1,\n\t\"page_size\": 10\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/man_hour/records",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"man_hour", 
+																		"records"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "创建实际工时",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"work_begin_date\": 1724051666000,\n\t\"work_end_date\": 1724342400000,\n\t\"include_holidays\": true,\n\t\"working_hour_records\": [{\n\t\"resource_type\": \"\",\n\t\"resource_id\": \"\",\n\t\"work_time\": \"\",\n\t\"work_description\": \"\"\n}]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/work_hour_record",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		":project_key", 
+																		"work_item", 
+																		":work_item_type_key", 
+																		":work_item_id", 
+																		"work_hour_record"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "更新实际工时",
+															"request": {
+																"method": "PUT",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"working_hour_records\": [{\n\t\"id\": 0,\n\t\"work_time\": \"\",\n\t\"work_description\": \"\"\n}]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/work_hour_record",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		":project_key", 
+																		"work_item", 
+																		":work_item_type_key", 
+																		":work_item_id", 
+																		"work_hour_record"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "删除实际工时",
+															"request": {
+																"method": "DELETE",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"working_hour_record_ids\": [0]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/work_hour_record",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		":project_key", 
+																		"work_item", 
+																		":work_item_type_key", 
+																		":work_item_id", 
+																		"work_hour_record"
+																	]
+																}
+															},
+															"response": []
+														}
+												]},
+										
+											{
+												"name": "工作项资源库",
+												"item": [
+													
+															{"name": "获取指定的工作项资源库实例列表（复杂传参）",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"data_sources\": [{\n\t\"project_key\": \"\",\n\t\"work_item_type_keys\": \"\"\n}],\n\t\"search_group\": {\n\t\"search_params\": [{\n\t\"param_key\": \"\",\n\t\"value\": \"\",\n\t\"operator\": \"\",\n\t\"pre_operator\": \"\",\n\t\"value_search_groups\": {}\n}],\n\t\"conjunction\": \"\",\n\t\"search_groups\": [{}]\n},\n\t\"pagination\": {\n\t\"page_size\": 10,\n\t\"search_after\": \"\",\n\t\"pit\": \"\",\n\t\"total\": 0\n},\n\t\"field_selected\": [\"\"],\n\t\"features\": {\"\":\"\"}\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/resource/search/params",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"resource", 
+																		"search", 
+																		"params"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "更新资源实例工作项",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"work_item_id\": 0,\n\t\"update_fields\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/resource/update",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"resource", 
+																		"update"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "获取工作项资源实例详情",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_ids\": [0],\n\t\"fields\": [\"\"],\n\t\"work_item_type_key\": \"\",\n\t\"expand\": {\n\t\"need_workflow\": true,\n\t\"relation_fields_detail\": true,\n\t\"need_multi_text\": true,\n\t\"need_user_detail\": true,\n\t\"need_sub_task_parent\": true,\n\t\"need_union_deliverable\": true,\n\t\"need_wbs_relation_chain_entity\": true,\n\t\"need_wbs_relation_chain_path\": true,\n\t\"need_group_uuid_for_compound\": true\n}\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/resource/query",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"resource", 
+																		"query"
+																	]
+																}
+															},
+															"response": []
+														},
+															{"name": "创建工作项资源库",
+															"request": {
+																"method": "POST",
+																"header": [
+																	{
+																		"key": "X-PLUGIN-TOKEN",
+																		"value": "{{plugin_token}}",
+																		"type": "text"
+																	},
+																	{
+																		"key": "X-USER-KEY",
+																		"value": "{{user_key}}",
+																		"type": "text"
+																	}
+																],
+																"body": {
+																	"mode": "raw",
+																	"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"template_id\": 0,\n\t\"field_value_pairs\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}]\n}",
+																	"options": {
+																		"raw": {
+																			"language": "json"
+																		}
+																	}
+																},
+																"url": {
+																	"raw": "{{base_url}}/open_api/work_item/resource/create_work_item",
+																	"host": [
+																		"{{base_url}}"
+																	],
+																	"path": [
+																		"open_api", 
+																		"work_item", 
+																		"resource", 
+																		"create_work_item"
+																	]
+																}
+															},
+															"response": []
+														}
+												]},
+										
+											{"name": "按组更新复合字段值",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"work_item_id\": 0,\n\t\"project_key\": \"\",\n\t\"field_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"group_uuid\": \"\",\n\t\"action\": \"\",\n\t\"fields\": [[{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}]]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/work_item/field_value/update_compound_field",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"work_item", 
+														"field_value", 
+														"update_compound_field"
+													]
+												}
+											},
+											"response": []
+										}
+								]},
+							
+								{
+								"name": "流程与节点",
+								"item": [
+								
+											{"name": "获取工作流详情",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"fields\": [\"\"],\n\t\"flow_type\": 0,\n\t\"expand\": {\n\t\"need_workflow\": true,\n\t\"relation_fields_detail\": true,\n\t\"need_multi_text\": true,\n\t\"need_user_detail\": true,\n\t\"need_sub_task_parent\": true,\n\t\"need_union_deliverable\": true,\n\t\"need_wbs_relation_chain_entity\": true,\n\t\"need_wbs_relation_chain_path\": true,\n\t\"need_group_uuid_for_compound\": true\n}\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/workflow/query",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"workflow", 
+														"query"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取工作流详情（WBS）",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/wbs_view?need_union_deliverable=true&need_schedule_table_agg=true",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"wbs_view"
+													]
+													
+												}
+											},
+											"response": []
+										},
+											{"name": "更新节点/排期",
+											"request": {
+												"method": "PUT",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"node_owners\": [\"\"],\n\t\"node_schedule\": {\n\t\"points\": 0.0,\n\t\"estimate_start_date\": 1724169600000,\n\t\"estimate_end_date\": 1724428799999,\n\t\"owners\": [\"\"],\n\t\"actual_work_time\": 0.0,\n\t\"is_auto\": true,\n\t\"planned_construction_period\": 0\n},\n\t\"schedules\": [{\n\t\"points\": 0.0,\n\t\"estimate_start_date\": 1724169600000,\n\t\"estimate_end_date\": 1724428799999,\n\t\"owners\": [\"\"],\n\t\"actual_work_time\": 0.0,\n\t\"is_auto\": true,\n\t\"planned_construction_period\": 0\n}],\n\t\"fields\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}],\n\t\"role_assignee\": [{\n\t\"role\": \"\",\n\t\"name\": \"\",\n\t\"owners\": [\"\"],\n\t\"exist\": true,\n\t\"is_member_multi\": true\n}]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/workflow/:work_item_type_key/:work_item_id/node/:node_id",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"workflow", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"node", 
+														":node_id"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "节点完成/回滚",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"action\": \"\",\n\t\"rollback_reason\": \"\",\n\t\"node_owners\": [\"\"],\n\t\"node_schedule\": {\n\t\"points\": 0.0,\n\t\"estimate_start_date\": 1724169600000,\n\t\"estimate_end_date\": 1724428799999,\n\t\"owners\": [\"\"],\n\t\"actual_work_time\": 0.0,\n\t\"is_auto\": true,\n\t\"planned_construction_period\": 0\n},\n\t\"schedules\": [{\n\t\"points\": 0.0,\n\t\"estimate_start_date\": 1724169600000,\n\t\"estimate_end_date\": 1724428799999,\n\t\"owners\": [\"\"],\n\t\"actual_work_time\": 0.0,\n\t\"is_auto\": true,\n\t\"planned_construction_period\": 0\n}],\n\t\"fields\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}],\n\t\"role_assignee\": [{\n\t\"role\": \"\",\n\t\"name\": \"\",\n\t\"owners\": [\"\"],\n\t\"exist\": true,\n\t\"is_member_multi\": true\n}],\n\t\"node_fields\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"field_alias\": \"\",\n\t\"field_type_key\": \"\"\n}],\n\t\"finished_infos\": {\n\t\"summary_mode\": \"\",\n\t\"conclusion\": {\n\t\"finished_conclusion_result\": {\n\t\"key\": \"\",\n\t\"label\": \"\",\n\t\"original_label\": \"\"\n},\n\t\"owners_finished_conclusion_result\": [{\n\t\"owner\": {\n\t\"id\": \"\",\n\t\"username\": \"\",\n\t\"employeeId\": \"\",\n\t\"email\": \"\",\n\t\"nickname\": \"\",\n\t\"avatar\": \"\",\n\t\"avatar_url\": \"\",\n\t\"en_name\": \"\",\n\t\"name\": \"\",\n\t\"larkOpenId\": \"\",\n\t\"department\": {\n\t\"id\": \"\",\n\t\"name\": \"\",\n\t\"en_name\": \"\"\n},\n\t\"leader\": {\n\t\"email\": \"\",\n\t\"employee_number\": \"\",\n\t\"id\": \"\",\n\t\"name\": \"\",\n\t\"u_name\": \"\"\n}\n},\n\t\"finished_conclusion_result\": {\n\t\"key\": \"\",\n\t\"label\": \"\",\n\t\"original_label\": \"\"\n}\n}]\n},\n\t\"opinion\": {\n\t\"finished_opinion_result\": \"\",\n\t\"owners_finished_opinion_result\": [{\n\t\"owner\": {\n\t\"id\": \"\",\n\t\"username\": \"\",\n\t\"employeeId\": \"\",\n\t\"email\": \"\",\n\t\"nickname\": \"\",\n\t\"avatar\": \"\",\n\t\"avatar_url\": \"\",\n\t\"en_name\": \"\",\n\t\"name\": \"\",\n\t\"larkOpenId\": \"\",\n\t\"department\": {\n\t\"id\": \"\",\n\t\"name\": \"\",\n\t\"en_name\": \"\"\n},\n\t\"leader\": {\n\t\"email\": \"\",\n\t\"employee_number\": \"\",\n\t\"id\": \"\",\n\t\"name\": \"\",\n\t\"u_name\": \"\"\n}\n},\n\t\"finished_opinion_result\": \"\"\n}]\n}\n}\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/workflow/:work_item_type_key/:work_item_id/node/:node_id/operate",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"workflow", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"node", 
+														":node_id", 
+														"operate"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "状态流转",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"transition_id\": 0,\n\t\"fields\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}],\n\t\"role_owners\": [{\n\t\"role\": \"\",\n\t\"name\": \"\",\n\t\"owners\": [\"\"],\n\t\"exist\": true,\n\t\"is_member_multi\": true\n}]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/workflow/:work_item_type_key/:work_item_id/node/state_change",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"workflow", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"node", 
+														"state_change"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取指定节点/状态流转所需必填信息",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"work_item_id\": 0,\n\t\"state_key\": \"\",\n\t\"mode\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/work_item/transition_required_info/get",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"work_item", 
+														"transition_required_info", 
+														"get"
+													]
+												}
+											},
+											"response": []
+										}
+								]},
+							
+								{
+								"name": "子任务",
+								"item": [
+								
+											{"name": "获取指定的子任务列表（跨空间）",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"project_keys\": [\"\"],\n\t\"page_size\": 10,\n\t\"page_num\": 1,\n\t\"name\": \"\",\n\t\"user_keys\": [\"\"],\n\t\"status\": 0,\n\t\"created_at\": {\n\t\"start\": 0,\n\t\"end\": 0\n},\n\t\"simple_names\": [\"\"]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/work_item/subtask/search",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														"work_item", 
+														"subtask", 
+														"search"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "获取子任务详情",
+											"request": {
+												"method": "GET",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/workflow/task?node_id=string",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"workflow", 
+														"task"
+													]
+													
+												}
+											},
+											"response": []
+										},
+											{"name": "创建子任务",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"node_id\": \"\",\n\t\"name\": \"\",\n\t\"alias_key\": \"\",\n\t\"assignee\": [\"\"],\n\t\"role_assignee\": [{\n\t\"role\": \"\",\n\t\"name\": \"\",\n\t\"owners\": [\"\"],\n\t\"exist\": true,\n\t\"is_member_multi\": true\n}],\n\t\"schedule\": {\n\t\"points\": 0.0,\n\t\"estimate_start_date\": 1724169600000,\n\t\"estimate_end_date\": 1724428799999,\n\t\"owners\": [\"\"],\n\t\"actual_work_time\": 0.0,\n\t\"is_auto\": true,\n\t\"planned_construction_period\": 0\n},\n\t\"note\": \"\",\n\t\"field_value_pairs\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/workflow/task",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"workflow", 
+														"task"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "更新子任务",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"name\": \"\",\n\t\"assignee\": [\"\"],\n\t\"role_assignee\": [{\n\t\"role\": \"\",\n\t\"name\": \"\",\n\t\"owners\": [\"\"],\n\t\"exist\": true,\n\t\"is_member_multi\": true\n}],\n\t\"schedule\": {\n\t\"points\": 0.0,\n\t\"estimate_start_date\": 1724169600000,\n\t\"estimate_end_date\": 1724428799999,\n\t\"owners\": [\"\"],\n\t\"actual_work_time\": 0.0,\n\t\"is_auto\": true,\n\t\"planned_construction_period\": 0\n},\n\t\"note\": \"\",\n\t\"deliverable\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}],\n\t\"update_fields\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/workflow/:node_id/task/:task_id",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"workflow", 
+														":node_id", 
+														"task", 
+														":task_id"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "子任务完成/回滚",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"node_id\": \"\",\n\t\"task_id\": 0,\n\t\"action\": \"\",\n\t\"assignee\": [\"\"],\n\t\"role_assignee\": [{\n\t\"role\": \"\",\n\t\"name\": \"\",\n\t\"owners\": [\"\"],\n\t\"exist\": true,\n\t\"is_member_multi\": true\n}],\n\t\"schedules\": [{\n\t\"points\": 0.0,\n\t\"estimate_start_date\": 1724169600000,\n\t\"estimate_end_date\": 1724428799999,\n\t\"owners\": [\"\"],\n\t\"actual_work_time\": 0.0,\n\t\"is_auto\": true,\n\t\"planned_construction_period\": 0\n}],\n\t\"deliverable\": [{\n\t\"field_key\": \"\",\n\t\"field_value\": \"\",\n\t\"target_state\": {\n\t\"state_key\": \"\",\n\t\"transition_id\": 0\n},\n\t\"field_type_key\": \"\",\n\t\"field_alias\": \"\",\n\t\"help_description\": \"\",\n\t\"update_mode\": 0\n}],\n\t\"note\": \"\"\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/subtask/modify",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"subtask", 
+														"modify"
+													]
+												}
+											},
+											"response": []
+										},
+											{"name": "删除子任务",
+											"request": {
+												"method": "DELETE",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/task/:task_id",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_type_key", 
+														":work_item_id", 
+														"task", 
+														":task_id"
+													]
+												}
+											},
+											"response": []
+										}
+								]},
+							
+								{
+								"name": "群组",
+								"item": [
+								
+											{"name": "拉机器人入群",
+											"request": {
+												"method": "POST",
+												"header": [
+													{
+														"key": "X-PLUGIN-TOKEN",
+														"value": "{{plugin_token}}",
+														"type": "text"
+													},
+													{
+														"key": "X-USER-KEY",
+														"value": "{{user_key}}",
+														"type": "text"
+													}
+												],
+												"body": {
+													"mode": "raw",
+													"raw": "{\n\t\"work_item_type_key\": \"\",\n\t\"app_ids\": [\"\"]\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_id/bot_join_chat",
+													"host": [
+														"{{base_url}}"
+													],
+													"path": [
+														"open_api", 
+														":project_key", 
+														"work_item", 
+														":work_item_id", 
+														"bot_join_chat"
+													]
+												}
+											},
+											"response": []
+										}
+								]}
+							
+					]
+				}
+			,
+				{
+					"name": "视图&度量",
+					"item": [
+						
+							{"name": "获取视图列表及配置信息",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"work_item_type_key\": \"\",\n\t\"view_ids\": [\"\"],\n\t\"created_by\": \"\",\n\t\"created_at\": {\n\t\"start\": 0,\n\t\"end\": 0\n},\n\t\"page_size\": 10,\n\t\"page_num\": 1,\n\t\"view_name\": \"\",\n\t\"is_query_quick_filter\": true\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/view_conf/list",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										"view_conf", 
+										"list"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "获取视图下工作项列表",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/fix_view/:view_id?page_size=0&page_num=0&quick_filter_id=string",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										"fix_view", 
+										":view_id"
+									]
+									,
+									"query": [
+										{
+											"key": "page_num",
+											"value": "0"
+										}, 
+										{
+											"key": "page_size",
+											"value": "0"
+										}, 
+										{
+											"key": "quick_filter_id",
+											"value": "string"
+										}
+									]
+									
+								}
+							},
+							"response": []
+						},
+							{"name": "获取视图下工作项列表（全景视图）",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"page_size\": 10,\n\t\"page_num\": 1,\n\t\"expand\": {\n\t\"need_workflow\": true,\n\t\"relation_fields_detail\": true,\n\t\"need_multi_text\": true,\n\t\"need_user_detail\": true,\n\t\"need_sub_task_parent\": true\n},\n\t\"quick_filter_id\": \"\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/view/:view_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										"view", 
+										":view_id"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "创建固定视图",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"work_item_id_list\": [0],\n\t\"name\": \"\",\n\t\"cooperation_mode\": 0,\n\t\"cooperation_user_keys\": [\"\"],\n\t\"cooperation_team_ids\": [0],\n\t\"cooperation_teams\": [{\n\t\"id\": \"\",\n\t\"not_cascade\": true,\n\t\"not_contain_team_manager\": true\n}]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/:work_item_type_key/fix_view",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										":work_item_type_key", 
+										"fix_view"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "更新固定视图",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"add_work_item_ids\": [0],\n\t\"remove_work_item_ids\": [0],\n\t\"cooperation_mode\": 0,\n\t\"cooperation_user_keys\": [\"\"],\n\t\"cooperation_team_ids\": [0],\n\t\"cooperation_teams\": [{\n\t\"id\": \"\",\n\t\"not_cascade\": true,\n\t\"not_contain_team_manager\": true\n}]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/:work_item_type_key/fix_view/:view_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										":work_item_type_key", 
+										"fix_view", 
+										":view_id"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "创建条件视图",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"search_group\": {\n\t\"search_params\": [{\n\t\"param_key\": \"\",\n\t\"value\": \"\",\n\t\"operator\": \"\",\n\t\"pre_operator\": \"\",\n\t\"value_search_groups\": {}\n}],\n\t\"conjunction\": \"\",\n\t\"search_groups\": [{}]\n},\n\t\"cooperation_mode\": 0,\n\t\"cooperation_user_keys\": [\"\"],\n\t\"cooperation_team_ids\": [0],\n\t\"name\": \"\",\n\t\"meego_user_key\": \"\",\n\t\"cooperation_teams\": [{\n\t\"id\": \"\",\n\t\"not_cascade\": true,\n\t\"not_contain_team_manager\": true\n}]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/view/v1/create_condition_view",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										"view", 
+										"v1", 
+										"create_condition_view"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "更新条件视图",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"project_key\": \"\",\n\t\"work_item_type_key\": \"\",\n\t\"search_group\": {\n\t\"search_params\": [{\n\t\"param_key\": \"\",\n\t\"value\": \"\",\n\t\"operator\": \"\",\n\t\"pre_operator\": \"\",\n\t\"value_search_groups\": {}\n}],\n\t\"conjunction\": \"\",\n\t\"search_groups\": [{}]\n},\n\t\"cooperation_mode\": 0,\n\t\"cooperation_user_keys\": [\"\"],\n\t\"cooperation_team_ids\": [0],\n\t\"name\": \"\",\n\t\"meego_user_key\": \"\",\n\t\"view_id\": \"\",\n\t\"cooperation_teams\": [{\n\t\"id\": \"\",\n\t\"not_cascade\": true,\n\t\"not_contain_team_manager\": true\n}]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/view/v1/update_condition_view",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										"view", 
+										"v1", 
+										"update_condition_view"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "删除视图",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/fix_view/:view_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										"fix_view", 
+										":view_id"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "获取度量图表明细数据",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/measure/:chart_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										"measure", 
+										":chart_id"
+									]
+									
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			,
+				{
+					"name": "评论",
+					"item": [
+						
+							{"name": "添加评论",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"content\": \"\",\n\t\"rich_text\": \"\",\n\t\"doc_rich_text\": {\n\t\"doc\": \"\",\n\t\"doc_text\": \"\",\n\t\"doc_html\": \"\",\n\t\"doc_img\": [\"\"],\n\t\"is_empty\": true\n}\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/comment/create",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										"work_item", 
+										":work_item_type_key", 
+										":work_item_id", 
+										"comment", 
+										"create"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "查询评论",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/comments?page_size=0&page_num=0",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										"work_item", 
+										":work_item_type_key", 
+										":work_item_id", 
+										"comments"
+									]
+									,
+									"query": [
+										{
+											"key": "page_num",
+											"value": "0"
+										}, 
+										{
+											"key": "page_size",
+											"value": "0"
+										}
+									]
+									
+								}
+							},
+							"response": []
+						},
+							{"name": "更新评论",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n\t\"content\": \"\",\n\t\"rich_text\": \"\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/comment/:comment_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										"work_item", 
+										":work_item_type_key", 
+										":work_item_id", 
+										"comment", 
+										":comment_id"
+									]
+								}
+							},
+							"response": []
+						},
+							{"name": "删除评论",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "X-PLUGIN-TOKEN",
+										"value": "{{plugin_token}}",
+										"type": "text"
+									},
+									{
+										"key": "X-USER-KEY",
+										"value": "{{user_key}}",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/open_api/:project_key/work_item/:work_item_type_key/:work_item_id/comment/:comment_id",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"open_api", 
+										":project_key", 
+										"work_item", 
+										":work_item_type_key", 
+										":work_item_id", 
+										"comment", 
+										":comment_id"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			
+	]
+}

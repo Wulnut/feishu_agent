@@ -145,6 +145,43 @@ Complex search with nested conditions.
 }
 ```
 
+### 2.5 Query Project Fields
+Retrieve all field definitions for a project, optionally filtered by work item type. This is crucial for mapping field keys (e.g., `field_123`) to human-readable names.
+
+- **Method**: `POST`
+- **Path**: `/open_api/:project_key/field/all`
+- **URL Params**:
+  - `project_key`: The unique key of the project.
+
+**Request Body (JSON):**
+```json
+{
+  "work_item_type_key": "task"  // Optional: Filter fields by work item type
+}
+```
+
+**Response (JSON):**
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": [
+    {
+      "field_key": "field_1a2b3c",
+      "field_name": "Priority",
+      "field_alias": "priority_alias",
+      "field_type_key": "single_select",
+      "options": [
+        {
+          "label": "High",
+          "value": "opt_123"
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## 3. Python Implementation Example
 
 Here is how to call the API using Python's `httpx` library (async).
