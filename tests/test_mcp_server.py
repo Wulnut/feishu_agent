@@ -78,7 +78,7 @@ class TestMCPTools:
         assert data["total"] == 2
         assert len(data["items"]) == 2
         mock_provider.get_tasks.assert_awaited_once_with(
-            status=None, priority=None, owner=None, page_num=1, page_size=50
+            name_keyword=None, status=None, priority=None, owner=None, page_num=1, page_size=50
         )
 
     @pytest.mark.asyncio

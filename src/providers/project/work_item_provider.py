@@ -68,6 +68,32 @@ class WorkItemProvider(Provider):
             logger.debug(f"Field '{field_name}' not found: {e}")
             return False
 
+    def _extract_field_value(self, item: dict, field_key: str) -> Optional[str]:
+        """
+        从工作项中提取字段值（辅助方法）
+
+        Args:
+            item: 工作项字典
+            field_key: 字段 Key
+
+        Returns:
+            字段值（字符串），如果不存在则返回 None
+        """
+        field_pairs = item.get("field_value_pairs", [])
+        for pair in field_pairs:
+            if pair.get("field_key") == field_key:
+                value = pair.get("field_value")
+                # 处理选项类型字段
+                if isinstance(value, dict):
+                    return value.get("label") or value.get("value")
+                # 处理用户类型字段
+                if isinstance(value, list) and value:
+                    first = value[0]
+                    if isinstance(first, dict):
+                        return first.get("name") or first.get("name_cn")
+                return str(value) if value else None
+        return None
+
     async def _resolve_field_value(
         self, project_key: str, type_key: str, field_key: str, value: Any
     ) -> Any:
@@ -288,7 +314,7 @@ class WorkItemProvider(Provider):
                     }
                 )
             else:
-                logger.warning(f"Field 'status' not found, skipping filter")
+                logger.warning("Field 'status' not found, skipping filter")
 
         # 处理优先级过滤
         if priority:
@@ -315,7 +341,7 @@ class WorkItemProvider(Provider):
                     }
                 )
             else:
-                logger.warning(f"Field 'priority' not found, skipping filter")
+                logger.warning("Field 'priority' not found, skipping filter")
 
         # 处理负责人过滤
         if owner:
@@ -329,7 +355,9 @@ class WorkItemProvider(Provider):
                     }
                 )
             except Exception as e:
-                logger.warning(f"Failed to resolve owner '{owner}': {e}, skipping owner filter")
+                logger.warning(
+                    f"Failed to resolve owner '{owner}': {e}, skipping owner filter"
+                )
 
         # 构建 search_group
         search_group = {"conjunction": "AND", "conditions": conditions}
@@ -349,7 +377,11 @@ class WorkItemProvider(Provider):
         # 处理 API 可能返回列表或字典的情况
         if isinstance(result, list):
             items = result
-            pagination = {"total": len(result), "page_num": page_num, "page_size": page_size}
+            pagination = {
+                "total": len(result),
+                "page_num": page_num,
+                "page_size": page_size,
+            }
             logger.debug("API returned list format, converted to standard format")
         else:
             items = result.get("work_items", [])
@@ -364,6 +396,7 @@ class WorkItemProvider(Provider):
 
     async def get_tasks(
         self,
+        name_keyword: Optional[str] = None,
         status: Optional[List[str]] = None,
         priority: Optional[List[str]] = None,
         owner: Optional[str] = None,
@@ -377,8 +410,10 @@ class WorkItemProvider(Provider):
         - 无参数时返回全部工作项
         - 字段不存在时自动跳过该过滤条件
         - 支持多维度组合过滤
+        - 如果提供 name_keyword，优先使用高效的 filter API
 
         Args:
+            name_keyword: 任务名称关键词（可选，支持模糊搜索）
             status: 状态列表（可选，如 ["待处理", "进行中"]）
             priority: 优先级列表（可选，如 ["P0", "P1"]）
             owner: 负责人（可选，姓名或邮箱）
@@ -397,12 +432,124 @@ class WorkItemProvider(Provider):
             # 获取全部工作项
             result = await provider.get_tasks()
 
+            # 按名称关键词搜索
+            result = await provider.get_tasks(name_keyword="SG06VA")
+
             # 按优先级过滤
             result = await provider.get_tasks(priority=["P0", "P1"])
         """
         project_key = await self._get_project_key()
         type_key = await self._get_type_key()
 
+        # 如果提供了 name_keyword，优先使用 filter API（更高效）
+        # filter API 支持 work_item_name 和 work_item_status，但不支持 priority/owner
+        if name_keyword:
+            logger.info(f"Using filter API for name keyword search: '{name_keyword}'")
+
+            # 准备 filter API 参数
+            filter_kwargs = {"work_item_name": name_keyword}
+
+            # filter API 支持 status，但需要转换为状态值
+            if status:
+                # 尝试解析状态值
+                try:
+                    field_key = await self.meta.get_field_key(
+                        project_key, type_key, "status"
+                    )
+                    resolved_statuses = []
+                    for s in status:
+                        try:
+                            val = await self._resolve_field_value(
+                                project_key, type_key, field_key, s
+                            )
+                            resolved_statuses.append(val)
+                        except Exception as e:
+                            logger.warning(f"Failed to resolve status '{s}': {e}")
+                    if resolved_statuses:
+                        filter_kwargs["work_item_status"] = resolved_statuses
+                        logger.info(
+                            f"Added status filter to filter API: {resolved_statuses}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Status field not available for filter API: {e}")
+
+            # filter API 不支持 priority 和 owner，记录警告
+            if priority:
+                logger.warning(
+                    "Filter API does not support priority filter, "
+                    "will filter results after retrieval"
+                )
+            if owner:
+                logger.warning(
+                    "Filter API does not support owner filter, "
+                    "will filter results after retrieval"
+                )
+
+            result = await self.api.filter(
+                project_key=project_key,
+                work_item_type_keys=[type_key],
+                page_num=page_num,
+                page_size=page_size,
+                **filter_kwargs,
+            )
+
+            # 标准化返回结果
+            if isinstance(result, list):
+                items = result
+                pagination = {
+                    "total": len(result),
+                    "page_num": page_num,
+                    "page_size": page_size,
+                }
+                logger.debug("API returned list format, converted to standard format")
+            else:
+                items = result.get("work_items", [])
+                pagination = result.get("pagination", {})
+
+            # 如果 filter API 不支持某些条件，在结果中进一步筛选
+            if priority or owner:
+                filtered_items = []
+                for item in items:
+                    # 检查优先级
+                    if priority:
+                        item_priority = self._extract_field_value(item, "priority")
+                        if item_priority not in priority:
+                            continue
+
+                    # 检查负责人
+                    if owner:
+                        try:
+                            user_key = await self.meta.get_user_key(owner)
+                            item_owner_key = self._extract_field_value(item, "owner")
+                            # 如果提取的是 user_key，直接比较
+                            if item_owner_key and item_owner_key != user_key:
+                                # 尝试匹配名称（owner 字段可能返回名称）
+                                if owner.lower() not in (item_owner_key or "").lower():
+                                    continue
+                        except Exception as e:
+                            logger.debug(f"Failed to filter by owner '{owner}': {e}")
+                            # 如果无法解析 owner，跳过该过滤条件
+                            pass
+
+                    filtered_items.append(item)
+
+                items = filtered_items
+                logger.info(
+                    f"Filtered results: {len(items)} items after priority/owner filtering"
+                )
+
+            logger.info(
+                f"Retrieved {len(items)} items (total: {pagination.get('total', 0)})"
+            )
+
+            return {
+                "items": items,
+                "total": pagination.get("total", len(items)),
+                "page_num": pagination.get("page_num", page_num),
+                "page_size": pagination.get("page_size", page_size),
+            }
+
+        # 没有 name_keyword，使用 search_params API 进行复杂条件查询
         # 构建搜索条件
         conditions = []
 
@@ -433,7 +580,7 @@ class WorkItemProvider(Provider):
                 logger.info(f"Added status filter: {status}")
             else:
                 logger.warning(
-                    f"Field 'status' not found in project, skipping status filter"
+                    "Field 'status' not found in project, skipping status filter"
                 )
 
         # 处理优先级过滤
@@ -463,7 +610,7 @@ class WorkItemProvider(Provider):
                 logger.info(f"Added priority filter: {priority}")
             else:
                 logger.warning(
-                    f"Field 'priority' not found in project, skipping priority filter"
+                    "Field 'priority' not found in project, skipping priority filter"
                 )
 
         # 处理负责人过滤
@@ -503,13 +650,19 @@ class WorkItemProvider(Provider):
         # 处理 API 可能返回列表或字典的情况
         if isinstance(result, list):
             items = result
-            pagination = {"total": len(result), "page_num": page_num, "page_size": page_size}
+            pagination = {
+                "total": len(result),
+                "page_num": page_num,
+                "page_size": page_size,
+            }
             logger.debug("API returned list format, converted to standard format")
         else:
             items = result.get("work_items", [])
             pagination = result.get("pagination", {})
 
-        logger.info(f"Retrieved {len(items)} items (total: {pagination.get('total', 0)})")
+        logger.info(
+            f"Retrieved {len(items)} items (total: {pagination.get('total', 0)})"
+        )
 
         return {
             "items": items,

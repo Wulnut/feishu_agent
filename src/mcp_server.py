@@ -199,6 +199,7 @@ async def create_task(
 @mcp.tool()
 async def get_tasks(
     project: str,
+    name_keyword: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     owner: Optional[str] = None,
@@ -210,13 +211,16 @@ async def get_tasks(
 
     这是通用的任务获取工具，具备以下特性：
     1. 无过滤参数时，返回项目的全部工作项
-    2. 支持按状态、优先级、负责人进行灵活过滤
-    3. 如果项目不存在某个字段（如状态），会自动跳过该过滤条件
+    2. 支持按任务名称关键词进行高效搜索（推荐）
+    3. 支持按状态、优先级、负责人进行灵活过滤
+    4. 如果项目不存在某个字段（如状态），会自动跳过该过滤条件
 
     Args:
         project: 项目标识符。可以是:
                 - 项目名称（如 "Project Management"）
                 - project_key（如 "project_xxx"）
+        name_keyword: 任务名称关键词（可选，支持模糊搜索，推荐使用）。
+                      例如："SG06VA" 可以搜索所有包含该关键词的任务。
         status: 状态过滤（多个用逗号分隔），如 "待处理,进行中"（可选）。
         priority: 优先级过滤（多个用逗号分隔），如 "P0,P1"（可选）。
         owner: 负责人过滤（姓名或邮箱）（可选）。
@@ -231,15 +235,18 @@ async def get_tasks(
         # 获取项目的全部工作项
         get_tasks(project="Project Management")
 
+        # 按名称关键词搜索（推荐，高效）
+        get_tasks(project="Project Management", name_keyword="SG06VA")
+
         # 获取指定优先级的任务
         get_tasks(project="Project Management", priority="P0,P1")
 
         # 组合多个条件过滤
         get_tasks(
             project="Project Management",
+            name_keyword="SG06VA",
             status="进行中",
-            priority="P0",
-            owner="张三"
+            priority="P0"
         )
     """
     try:
@@ -250,6 +257,7 @@ async def get_tasks(
         priority_list = [p.strip() for p in priority.split(",")] if priority else None
 
         result = await provider.get_tasks(
+            name_keyword=name_keyword,
             status=status_list,
             priority=priority_list,
             owner=owner,
