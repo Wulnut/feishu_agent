@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-feishu-agent = "src.mcp_server:main"
+lark-agent = "src.mcp_server:main"
 
 [dependency-groups]
 dev = [
