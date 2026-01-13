@@ -22,8 +22,8 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from src.providers.project.work_item_provider import WorkItemProvider
 from src.providers.project.managers import MetadataManager
+from src.providers.project.work_item_provider import WorkItemProvider
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +268,7 @@ async def get_tasks(
         # 确保 result 是字典类型
         if not isinstance(result, dict):
             logger.error(f"Unexpected result type: {type(result)}, value: {result}")
-            return f"获取任务列表失败: 返回数据格式错误"
+            return "获取任务列表失败: 返回数据格式错误"
 
         # 简化返回结果
         simplified = [_simplify_work_item(item) for item in result.get("items", [])]
@@ -463,3 +463,42 @@ async def get_task_options(project: str, field_name: str) -> str:
     except Exception as e:
         logger.exception(f"Failed to get options: {e}")
         return f"获取选项失败: {str(e)}"
+
+
+def main():
+    """
+    MCP Server 入口点
+
+    用于通过 uv tool install 安装后的命令行调用
+    """
+    import sys
+    from pathlib import Path
+
+    from src.core.config import settings
+
+    # 配置日志
+    # 如果存在 log 目录，写入文件；否则只输出到 stderr
+    log_dir = Path("log")
+    if log_dir.exists() and log_dir.is_dir():
+        log_file = log_dir / "agent.log"
+        logging.basicConfig(
+            level=settings.get_log_level(),
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            filename=str(log_file),
+            filemode="a",
+            encoding="utf-8",
+        )
+    else:
+        # 安装后可能没有 log 目录，只输出到 stderr
+        logging.basicConfig(
+            level=settings.get_log_level(),
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            stream=sys.stderr,
+        )
+
+    # 运行 MCP server
+    mcp.run()
+
+
+if __name__ == "__main__":
+    main()

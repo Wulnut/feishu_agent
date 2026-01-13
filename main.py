@@ -1,16 +1,12 @@
-from src.mcp_server import mcp
-from src.core.config import settings
-import logging
-import sys
+"""
+Feishu Agent MCP Server 入口点
 
-# Configure logging to write to a file in log directory
-logging.basicConfig(
-    level=settings.get_log_level(),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filename="log/agent.log",
-    filemode="a",
-    encoding="utf-8",
-)
+支持两种运行方式：
+1. 直接运行: python main.py
+2. 通过 uv tool install 安装后: feishu-agent
+"""
+
+from src.mcp_server import main
 
 if __name__ == "__main__":
-    mcp.run()
+    main()

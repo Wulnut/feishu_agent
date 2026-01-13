@@ -128,35 +128,58 @@ AI: 调用 get_task_options(project_key="project_xxx", field_name="status")
 返回: {"field": "status", "options": {"待处理": "opt_1", "进行中": "opt_2", "已完成": "opt_3"}}
 ```
 
-## 🚀 快速开始 (开发指南)
+## 🚀 快速开始
 
-### 前置要求
+### 方式一：通过 uv tool install（推荐，最简单）
+
+```bash
+# 安装
+uv tool install --from git+https://github.com/Wulnut/feishu_agent feishu-agent
+
+# 运行
+feishu-agent
+```
+
+安装后，`feishu-agent` 命令会自动添加到 PATH 中，可以直接使用。
+
+### 方式二：从源码运行（开发模式）
+
+#### 前置要求
 
 *   [uv](https://github.com/astral-sh/uv) (推荐) 或 Python 3.11+
 *   Docker (可选，用于容器化开发)
 
-### 1. 环境配置
-
-复制配置模板并填写您的飞书凭证：
+#### 1. 克隆仓库
 
 ```bash
-cp .env.example .env
+git clone https://github.com/Wulnut/feishu_agent.git
+cd feishu_agent
 ```
 
-编辑 `.env` 文件，填入以下信息：
-*   `LARK_APP_ID` / `LARK_APP_SECRET`: 飞书自建应用凭证。
-*   `FEISHU_PROJECT_USER_TOKEN` / `FEISHU_PROJECT_USER_KEY`: 飞书项目 API 专用凭证 (X-PLUGIN-TOKEN / X-USER-KEY)。
-*   `FEISHU_PROJECT_BASE_URL`: (可选) 私有化部署地址，默认为 `https://project.feishu.cn`。
+#### 2. 环境配置
 
-### 2. 安装依赖
+创建 `.env` 文件并填写您的飞书凭证：
 
-本项目使用 `uv` 进行依赖管理：
+```bash
+# 创建 .env 文件
+cat > .env << EOF
+LARK_APP_ID=your_app_id
+LARK_APP_SECRET=your_app_secret
+FEISHU_PROJECT_USER_TOKEN=your_token
+FEISHU_PROJECT_USER_KEY=your_user_key
+# 或使用 Plugin 方式（推荐）
+# FEISHU_PROJECT_PLUGIN_ID=your_plugin_id
+# FEISHU_PROJECT_PLUGIN_SECRET=your_plugin_secret
+EOF
+```
+
+#### 3. 安装依赖
 
 ```bash
 uv sync
 ```
 
-### 3. 启动服务
+#### 4. 启动服务
 
 ```bash
 uv run main.py
@@ -170,8 +193,20 @@ uv run main.py
 
 ### Cursor IDE 配置
 
-在 Cursor 中配置 MCP server，编辑 `~/.cursor/mcp.json`（Linux/macOS）或 `%APPDATA%\Cursor\mcp.json`（Windows），添加以下配置：
+在 Cursor 中配置 MCP server，编辑 `~/.cursor/mcp.json`（Linux/macOS）或 `%APPDATA%\Cursor\mcp.json`（Windows）。
 
+**如果使用 `uv tool install` 安装（推荐）：**
+```json
+{
+  "mcpServers": {
+    "feishu-agent": {
+      "command": "feishu-agent"
+    }
+  }
+}
+```
+
+**如果从源码运行：**
 ```json
 {
   "mcpServers": {
@@ -189,21 +224,24 @@ uv run main.py
 ```
 
 **配置说明：**
-*   `command`: 使用 `uv` 命令运行服务
-*   `--directory`: 指定项目目录的绝对路径（请替换为您的实际路径）
-*   `main.py`: 服务入口文件
-
-**注意事项：**
-*   确保 `uv` 已安装并在系统 PATH 中
-*   确保项目目录路径正确
-*   确保 `.env` 文件已正确配置飞书凭证
+*   推荐使用 `uv tool install` 方式，配置更简单
+*   如果从源码运行，需要确保 `uv` 已安装并在系统 PATH 中
+*   确保 `.env` 文件已正确配置飞书凭证（或设置环境变量）
 *   配置修改后需要重启 Cursor 才能生效
 
 ### Claude Desktop 配置
 
-在 Claude Desktop 中配置，编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）或 `%APPDATA%\Claude\claude_desktop_config.json`（Windows），添加类似的配置：
+在 Claude Desktop 中配置，编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）或 `%APPDATA%\Claude\claude_desktop_config.json`（Windows）：
 
 ```json
+{
+  "mcpServers": {
+    "feishu-agent": {
+      "command": "feishu-agent"
+    }
+  }
+}
+
 {
   "mcpServers": {
     "feishu-agent": {
@@ -218,6 +256,8 @@ uv run main.py
   }
 }
 ```
+
+**注意**：使用 `uv tool install` 安装后，需要确保 `~/.local/bin`（Linux/macOS）或 `%USERPROFILE%\.local\bin`（Windows）在 PATH 中。
 
 ### 使用方式
 
