@@ -18,14 +18,39 @@ MCP Server - 飞书 Agent 工具接口
 
 import json
 import logging
+import sys
+from pathlib import Path
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from src.core.config import settings
 from src.providers.project.managers import MetadataManager
 from src.providers.project.work_item_provider import WorkItemProvider
 
+# 在模块级别配置日志（确保在 logger 创建前配置）
+# 检查是否已经配置过日志，避免重复配置
+if not logging.root.handlers:
+    log_dir = Path("log")
+    if log_dir.exists() and log_dir.is_dir():
+        log_file = log_dir / "agent.log"
+        logging.basicConfig(
+            level=settings.get_log_level(),
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            filename=str(log_file),
+            filemode="a",
+            encoding="utf-8",
+        )
+    else:
+        # 如果没有 log 目录，输出到 stderr
+        logging.basicConfig(
+            level=settings.get_log_level(),
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            stream=sys.stderr,
+        )
+
 logger = logging.getLogger(__name__)
+logger.debug("Logger initialized for module: %s", __name__)
 
 # Initialize FastMCP server
 mcp = FastMCP("Lark")
@@ -187,8 +212,13 @@ async def create_task(
         )
     """
     try:
-        logger.info("Creating task: project=%s, name=%s, priority=%s, assignee=%s",
-                   project, name, priority, assignee)
+        logger.info(
+            "Creating task: project=%s, name=%s, priority=%s, assignee=%s",
+            project,
+            name,
+            priority,
+            assignee,
+        )
         provider = _create_provider(project)
         issue_id = await provider.create_issue(
             name=name,
@@ -199,8 +229,13 @@ async def create_task(
         logger.info("Task created successfully: issue_id=%s", issue_id)
         return f"创建成功，Issue ID: {issue_id}"
     except Exception as e:
-        logger.error("Failed to create task: project=%s, name=%s, error=%s",
-                    project, name, e, exc_info=True)
+        logger.error(
+            "Failed to create task: project=%s, name=%s, error=%s",
+            project,
+            name,
+            e,
+            exc_info=True,
+        )
         return f"创建失败: {str(e)}"
 
 
@@ -258,8 +293,16 @@ async def get_tasks(
         )
     """
     try:
-        logger.info("Getting tasks: project=%s, name_keyword=%s, status=%s, priority=%s, owner=%s, page=%d/%d",
-                   project, name_keyword, status, priority, owner, page_num, page_size)
+        logger.info(
+            "Getting tasks: project=%s, name_keyword=%s, status=%s, priority=%s, owner=%s, page=%d/%d",
+            project,
+            name_keyword,
+            status,
+            priority,
+            owner,
+            page_num,
+            page_size,
+        )
         provider = _create_provider(project)
 
         # 解析逗号分隔的过滤条件
@@ -283,7 +326,9 @@ async def get_tasks(
         # 简化返回结果
         simplified = [_simplify_work_item(item) for item in result.get("items", [])]
 
-        logger.info("Retrieved %d tasks (total: %d)", len(simplified), result.get("total", 0))
+        logger.info(
+            "Retrieved %d tasks (total: %d)", len(simplified), result.get("total", 0)
+        )
 
         return json.dumps(
             {
@@ -296,7 +341,9 @@ async def get_tasks(
             indent=2,
         )
     except Exception as e:
-        logger.error("Failed to get tasks: project=%s, error=%s", project, e, exc_info=True)
+        logger.error(
+            "Failed to get tasks: project=%s, error=%s", project, e, exc_info=True
+        )
         return f"获取任务列表失败: {str(e)}"
 
 
@@ -345,8 +392,15 @@ async def filter_tasks(
         )
     """
     try:
-        logger.info("Filtering tasks: project=%s, status=%s, priority=%s, owner=%s, page=%d/%d",
-                   project, status, priority, owner, page_num, page_size)
+        logger.info(
+            "Filtering tasks: project=%s, status=%s, priority=%s, owner=%s, page=%d/%d",
+            project,
+            status,
+            priority,
+            owner,
+            page_num,
+            page_size,
+        )
         provider = _create_provider(project)
 
         # 解析逗号分隔的过滤条件
@@ -366,7 +420,11 @@ async def filter_tasks(
             _simplify_work_item(item) for item in result.get("items", [])
         ]
 
-        logger.info("Filtered %d tasks (total: %d)", len(simplified_items), result.get("total", 0))
+        logger.info(
+            "Filtered %d tasks (total: %d)",
+            len(simplified_items),
+            result.get("total", 0),
+        )
 
         return json.dumps(
             {
@@ -379,7 +437,9 @@ async def filter_tasks(
             indent=2,
         )
     except Exception as e:
-        logger.error("Failed to filter tasks: project=%s, error=%s", project, e, exc_info=True)
+        logger.error(
+            "Failed to filter tasks: project=%s, error=%s", project, e, exc_info=True
+        )
         return f"过滤失败: {str(e)}"
 
 
@@ -429,8 +489,15 @@ async def update_task(
         )
     """
     try:
-        logger.info("Updating task: project=%s, issue_id=%d, name=%s, priority=%s, status=%s, assignee=%s",
-                   project, issue_id, name, priority, status, assignee)
+        logger.info(
+            "Updating task: project=%s, issue_id=%d, name=%s, priority=%s, status=%s, assignee=%s",
+            project,
+            issue_id,
+            name,
+            priority,
+            status,
+            assignee,
+        )
         provider = _create_provider(project)
         await provider.update_issue(
             issue_id=issue_id,
@@ -443,8 +510,13 @@ async def update_task(
         logger.info("Task updated successfully: issue_id=%d", issue_id)
         return f"更新成功，Issue ID: {issue_id}"
     except Exception as e:
-        logger.error("Failed to update task: project=%s, issue_id=%d, error=%s",
-                    project, issue_id, e, exc_info=True)
+        logger.error(
+            "Failed to update task: project=%s, issue_id=%d, error=%s",
+            project,
+            issue_id,
+            e,
+            exc_info=True,
+        )
         return f"更新失败: {str(e)}"
 
 
@@ -472,7 +544,9 @@ async def get_task_options(project: str, field_name: str) -> str:
         get_task_options(project="SR6D2VA-7552-Lark", field_name="priority")
     """
     try:
-        logger.info("Getting task options: project=%s, field_name=%s", project, field_name)
+        logger.info(
+            "Getting task options: project=%s, field_name=%s", project, field_name
+        )
         provider = _create_provider(project)
         options = await provider.list_available_options(field_name)
 
@@ -483,8 +557,13 @@ async def get_task_options(project: str, field_name: str) -> str:
             indent=2,
         )
     except Exception as e:
-        logger.error("Failed to get options: project=%s, field_name=%s, error=%s",
-                    project, field_name, e, exc_info=True)
+        logger.error(
+            "Failed to get options: project=%s, field_name=%s, error=%s",
+            project,
+            field_name,
+            e,
+            exc_info=True,
+        )
         return f"获取选项失败: {str(e)}"
 
 
@@ -494,35 +573,22 @@ def main():
 
     用于通过 uv tool install 安装后的命令行调用
     """
-    import sys
-    from pathlib import Path
-
-    from src.core.config import settings
-
-    # 配置日志
-    # 如果存在 log 目录，写入文件；否则只输出到 stderr
-    log_dir = Path("log")
-    if log_dir.exists() and log_dir.is_dir():
-        log_file = log_dir / "agent.log"
-        logging.basicConfig(
-            level=settings.get_log_level(),
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            filename=str(log_file),
-            filemode="a",
-            encoding="utf-8",
-        )
-        logger.info("Logging to file: %s", log_file)
-    else:
-        # 安装后可能没有 log 目录，只输出到 stderr
-        logging.basicConfig(
-            level=settings.get_log_level(),
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            stream=sys.stderr,
-        )
-        logger.info("Logging to stderr (log directory not found)")
-
+    # 日志已在模块级别配置，这里只需要记录启动信息
     logger.info("Starting MCP Server (Lark Agent)")
     logger.info("Log level: %s", settings.LOG_LEVEL)
+
+    # 检查日志输出位置
+    root_logger = logging.getLogger()
+    handlers = root_logger.handlers
+    if handlers:
+        handler = handlers[0]
+        if isinstance(handler, logging.FileHandler):
+            logger.info("Logging to file: %s", handler.baseFilename)
+        elif isinstance(handler, logging.StreamHandler):
+            logger.info(
+                "Logging to stream: %s",
+                handler.stream.name if hasattr(handler.stream, "name") else "stderr",
+            )
 
     # 运行 MCP server
     try:
