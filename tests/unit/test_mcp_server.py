@@ -1,8 +1,13 @@
 """
 MCP Server 工具测试
+
+测试策略:
+- 返回 JSON 的工具: 解析 JSON 后验证结构化数据
+- 返回纯文本的工具: 验证关键信息存在，而非精确匹配文案
 """
 
 import json
+import re
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
@@ -18,9 +23,13 @@ class TestMCPTools:
             mock_cls.return_value = mock_instance
             yield mock_instance
 
+    # =========================================================================
+    # create_task 测试 (返回纯文本)
+    # =========================================================================
+
     @pytest.mark.asyncio
     async def test_create_task_success(self, mock_provider):
-        """测试创建任务成功"""
+        """测试创建任务成功 - 验证返回包含 issue_id"""
         from src.mcp_server import create_task
 
         mock_provider.create_issue.return_value = 12345
@@ -33,8 +42,9 @@ class TestMCPTools:
             assignee="张三",
         )
 
-        assert "创建成功" in result
+        # 验证返回的 issue_id（核心信息）
         assert "12345" in result
+        # 验证 API 调用参数
         mock_provider.create_issue.assert_awaited_once_with(
             name="Test Task",
             priority="P0",
@@ -44,7 +54,7 @@ class TestMCPTools:
 
     @pytest.mark.asyncio
     async def test_create_task_error(self, mock_provider):
-        """测试创建任务失败"""
+        """测试创建任务失败 - 验证错误信息被包含"""
         from src.mcp_server import create_task
 
         mock_provider.create_issue.side_effect = Exception("API Error")
@@ -54,12 +64,16 @@ class TestMCPTools:
             name="Test Task",
         )
 
-        assert "创建失败" in result
+        # 验证错误信息被传递（核心信息）
         assert "API Error" in result
+
+    # =========================================================================
+    # get_tasks 测试 (返回 JSON)
+    # =========================================================================
 
     @pytest.mark.asyncio
     async def test_get_tasks_success(self, mock_provider):
-        """测试获取任务成功"""
+        """测试获取任务成功 - 验证 JSON 结构"""
         from src.mcp_server import get_tasks
 
         mock_provider.get_tasks.return_value = {
@@ -74,28 +88,41 @@ class TestMCPTools:
 
         result = await get_tasks(project="proj_xxx", page_size=50)
 
+        # 解析 JSON 并验证结构
         data = json.loads(result)
+        assert isinstance(data, dict), "返回值应为 JSON 对象"
+        assert "total" in data, "应包含 total 字段"
+        assert "items" in data, "应包含 items 字段"
         assert data["total"] == 2
         assert len(data["items"]) == 2
+        # 验证 items 结构
+        for item in data["items"]:
+            assert "id" in item
+            assert "name" in item
+
         mock_provider.get_tasks.assert_awaited_once_with(
             name_keyword=None, status=None, priority=None, owner=None, page_num=1, page_size=50
         )
 
     @pytest.mark.asyncio
     async def test_get_tasks_error(self, mock_provider):
-        """测试获取任务失败"""
+        """测试获取任务失败 - 验证错误信息被包含"""
         from src.mcp_server import get_tasks
 
         mock_provider.get_tasks.side_effect = Exception("Network Error")
 
         result = await get_tasks(project="proj_xxx")
 
-        assert "获取任务列表失败" in result
+        # 验证错误信息被传递
         assert "Network Error" in result
+
+    # =========================================================================
+    # filter_tasks 测试 (返回 JSON)
+    # =========================================================================
 
     @pytest.mark.asyncio
     async def test_filter_tasks_success(self, mock_provider):
-        """测试过滤任务成功"""
+        """测试过滤任务成功 - 验证 JSON 结构和参数解析"""
         from src.mcp_server import filter_tasks
 
         mock_provider.filter_issues.return_value = {
@@ -113,11 +140,14 @@ class TestMCPTools:
             page_size=20,
         )
 
+        # 解析 JSON 并验证结构
         data = json.loads(result)
+        assert isinstance(data, dict)
         assert data["total"] == 1
         assert len(data["items"]) == 1
+        assert data["items"][0]["id"] == 1
 
-        # 验证参数解析
+        # 验证参数解析（逗号分隔 -> 列表）
         mock_provider.filter_issues.assert_awaited_once()
         call_kwargs = mock_provider.filter_issues.call_args.kwargs
         assert call_kwargs["status"] == ["进行中"]
@@ -125,7 +155,7 @@ class TestMCPTools:
 
     @pytest.mark.asyncio
     async def test_filter_tasks_no_conditions(self, mock_provider):
-        """测试无过滤条件"""
+        """测试无过滤条件 - 验证空结果 JSON"""
         from src.mcp_server import filter_tasks
 
         mock_provider.filter_issues.return_value = {
@@ -139,14 +169,19 @@ class TestMCPTools:
 
         data = json.loads(result)
         assert data["total"] == 0
+        assert data["items"] == []
 
         call_kwargs = mock_provider.filter_issues.call_args.kwargs
         assert call_kwargs["status"] is None
         assert call_kwargs["priority"] is None
 
+    # =========================================================================
+    # update_task 测试 (返回纯文本)
+    # =========================================================================
+
     @pytest.mark.asyncio
     async def test_update_task_success(self, mock_provider):
-        """测试更新任务成功"""
+        """测试更新任务成功 - 验证返回包含 issue_id"""
         from src.mcp_server import update_task
 
         mock_provider.update_issue.return_value = None
@@ -158,7 +193,7 @@ class TestMCPTools:
             priority="P1",
         )
 
-        assert "更新成功" in result
+        # 验证返回的 issue_id（核心信息）
         assert "12345" in result
         mock_provider.update_issue.assert_awaited_once_with(
             issue_id=12345,
@@ -171,7 +206,7 @@ class TestMCPTools:
 
     @pytest.mark.asyncio
     async def test_update_task_error(self, mock_provider):
-        """测试更新任务失败"""
+        """测试更新任务失败 - 验证错误信息被包含"""
         from src.mcp_server import update_task
 
         mock_provider.update_issue.side_effect = Exception("Field not found")
@@ -182,12 +217,16 @@ class TestMCPTools:
             status="未知状态",
         )
 
-        assert "更新失败" in result
+        # 验证错误信息被传递
         assert "Field not found" in result
+
+    # =========================================================================
+    # get_task_options 测试 (返回 JSON)
+    # =========================================================================
 
     @pytest.mark.asyncio
     async def test_get_task_options_success(self, mock_provider):
-        """测试获取字段选项成功"""
+        """测试获取字段选项成功 - 验证 JSON 结构"""
         from src.mcp_server import get_task_options
 
         mock_provider.list_available_options.return_value = {
@@ -198,21 +237,26 @@ class TestMCPTools:
 
         result = await get_task_options(project="proj_xxx", field_name="status")
 
+        # 解析 JSON 并验证结构
         data = json.loads(result)
+        assert isinstance(data, dict)
+        assert "field" in data
+        assert "options" in data
         assert data["field"] == "status"
+        assert isinstance(data["options"], dict)
         assert "待处理" in data["options"]
         assert data["options"]["待处理"] == "opt_pending"
 
     @pytest.mark.asyncio
     async def test_get_task_options_error(self, mock_provider):
-        """测试获取字段选项失败"""
+        """测试获取字段选项失败 - 验证错误信息被包含"""
         from src.mcp_server import get_task_options
 
         mock_provider.list_available_options.side_effect = Exception("Unknown field")
 
         result = await get_task_options(project="proj_xxx", field_name="unknown")
 
-        assert "获取选项失败" in result
+        # 验证错误信息被传递
         assert "Unknown field" in result
 
 

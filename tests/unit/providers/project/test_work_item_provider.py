@@ -330,3 +330,169 @@ async def test_filter_issues_empty_conditions(mock_api, mock_metadata):
     _, kwargs = mock_api.search_params.call_args
     search_group = kwargs["search_group"]
     assert search_group["conditions"] == []
+
+
+# =============================================================================
+# 异常流测试 (Exception Flow Tests)
+# =============================================================================
+
+
+class TestProviderExceptionHandling:
+    """Provider 异常处理测试"""
+
+    @pytest.mark.asyncio
+    async def test_project_not_found(self, mock_api, mock_metadata):
+        """测试项目不存在时抛出明确错误"""
+        mock_metadata.get_project_key.side_effect = ValueError("项目 'Unknown Project' 不存在")
+
+        provider = WorkItemProvider("Unknown Project")
+
+        with pytest.raises(ValueError) as exc_info:
+            await provider.create_issue(name="Test")
+
+        assert "不存在" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_work_item_type_not_found(self, mock_api, mock_metadata):
+        """测试工作项类型不存在时抛出明确错误"""
+        mock_metadata.get_project_key.return_value = "proj_123"
+        mock_metadata.get_type_key.side_effect = ValueError("工作项类型 'Unknown' 不存在")
+
+        provider = WorkItemProvider("My Project")
+
+        with pytest.raises(ValueError) as exc_info:
+            await provider.create_issue(name="Test")
+
+        assert "不存在" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_api_error_propagation(self, mock_api, mock_metadata):
+        """测试 API 错误被正确传递"""
+        mock_metadata.get_project_key.return_value = "proj_123"
+        mock_metadata.get_type_key.return_value = "type_issue"
+        mock_metadata.get_field_key.side_effect = lambda pk, tk, name: f"field_{name}"
+        mock_api.create = AsyncMock(side_effect=Exception("API 调用失败: 500 Internal Server Error"))
+
+        provider = WorkItemProvider("My Project")
+
+        with pytest.raises(Exception) as exc_info:
+            await provider.create_issue(name="Test")
+
+        assert "API 调用失败" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_field_key_not_found(self, mock_api, mock_metadata):
+        """测试字段名不存在时抛出明确错误"""
+        mock_metadata.get_project_key.return_value = "proj_123"
+        mock_metadata.get_type_key.return_value = "type_issue"
+        mock_metadata.get_field_key.side_effect = ValueError("字段 'unknown_field' 不存在")
+
+        provider = WorkItemProvider("My Project")
+
+        with pytest.raises(ValueError) as exc_info:
+            await provider.update_issue(issue_id=1001, status="进行中")
+
+        assert "不存在" in str(exc_info.value)
+
+
+# =============================================================================
+# 分页边界测试 (Pagination Boundary Tests)
+# =============================================================================
+
+
+class TestProviderPagination:
+    """Provider 分页边界测试"""
+
+    @pytest.mark.asyncio
+    async def test_get_tasks_empty_page(self, mock_api, mock_metadata):
+        """测试获取空页（没有任何工作项）"""
+        mock_metadata.get_project_key.return_value = "proj_123"
+        mock_metadata.get_type_key.return_value = "type_issue"
+
+        mock_api.search_params = AsyncMock(
+            return_value={
+                "work_items": [],
+                "pagination": {"total": 0, "page_num": 1, "page_size": 50},
+            }
+        )
+
+        provider = WorkItemProvider("My Project")
+        result = await provider.get_tasks(page_size=50)
+
+        assert result["total"] == 0
+        assert result["items"] == []
+        assert result["page_num"] == 1
+        assert result["page_size"] == 50
+
+    @pytest.mark.asyncio
+    async def test_get_tasks_last_page(self, mock_api, mock_metadata):
+        """测试获取最后一页（部分数据）"""
+        mock_metadata.get_project_key.return_value = "proj_123"
+        mock_metadata.get_type_key.return_value = "type_issue"
+
+        # 假设总共 55 条数据，每页 20 条，第 3 页只有 15 条
+        mock_api.search_params = AsyncMock(
+            return_value={
+                "work_items": [{"id": i, "name": f"Task {i}"} for i in range(41, 56)],
+                "pagination": {"total": 55, "page_num": 3, "page_size": 20},
+            }
+        )
+
+        provider = WorkItemProvider("My Project")
+        result = await provider.get_tasks(page_num=3, page_size=20)
+
+        assert result["total"] == 55
+        assert len(result["items"]) == 15  # 最后一页只有 15 条
+        assert result["page_num"] == 3
+
+    @pytest.mark.asyncio
+    async def test_get_tasks_beyond_total_pages(self, mock_api, mock_metadata):
+        """测试请求超出总页数的页码（应返回空列表）"""
+        mock_metadata.get_project_key.return_value = "proj_123"
+        mock_metadata.get_type_key.return_value = "type_issue"
+
+        mock_api.search_params = AsyncMock(
+            return_value={
+                "work_items": [],
+                "pagination": {"total": 55, "page_num": 100, "page_size": 20},
+            }
+        )
+
+        provider = WorkItemProvider("My Project")
+        result = await provider.get_tasks(page_num=100, page_size=20)
+
+        assert result["total"] == 55
+        assert result["items"] == []
+        assert result["page_num"] == 100
+
+    @pytest.mark.asyncio
+    async def test_filter_issues_with_pagination(self, mock_api, mock_metadata):
+        """测试过滤查询的分页参数正确传递"""
+        mock_metadata.get_project_key.return_value = "proj_123"
+        mock_metadata.get_type_key.return_value = "type_issue"
+        mock_metadata.get_field_key.side_effect = lambda pk, tk, name: f"field_{name}"
+        mock_metadata.get_option_value.side_effect = lambda pk, tk, fk, val: f"opt_{val}"
+
+        mock_api.search_params = AsyncMock(
+            return_value={
+                "work_items": [{"id": 1, "name": "Task 1"}],
+                "pagination": {"total": 100, "page_num": 5, "page_size": 10},
+            }
+        )
+
+        provider = WorkItemProvider("My Project")
+        result = await provider.filter_issues(
+            status=["进行中"],
+            page_num=5,
+            page_size=10,
+        )
+
+        # 验证分页参数被正确传递
+        _, kwargs = mock_api.search_params.call_args
+        assert kwargs["page_num"] == 5
+        assert kwargs["page_size"] == 10
+
+        # 验证返回值包含分页信息
+        assert result["total"] == 100
+        assert result["page_num"] == 5
+        assert result["page_size"] == 10

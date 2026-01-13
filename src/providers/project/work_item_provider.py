@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 
+from src.core.config import settings
 from src.providers.base import Provider
 from src.providers.project.api.work_item import WorkItemAPI
 from src.providers.project.managers import MetadataManager
@@ -16,6 +17,7 @@ class WorkItemProvider(Provider):
     设计说明:
     - 使用 MetadataManager 实现零硬编码: 所有 Key/Value 通过名称动态解析
     - 使用 WorkItemAPI 执行原子操作
+    - 支持从环境变量 FEISHU_PROJECT_KEY 读取默认项目
     """
 
     def __init__(
@@ -24,8 +26,15 @@ class WorkItemProvider(Provider):
         project_key: Optional[str] = None,
         work_item_type_name: str = "Issue管理",
     ):
+        # 优先使用显式传入的参数，否则使用环境变量配置
         if not project_name and not project_key:
-            raise ValueError("Must provide either project_name or project_key")
+            if settings.FEISHU_PROJECT_KEY:
+                project_key = settings.FEISHU_PROJECT_KEY
+            else:
+                raise ValueError(
+                    "Must provide either project_name or project_key, "
+                    "or set FEISHU_PROJECT_KEY environment variable"
+                )
 
         self.project_name = project_name
         self._project_key = project_key

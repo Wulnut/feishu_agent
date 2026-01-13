@@ -110,18 +110,24 @@ def _looks_like_project_key(identifier: str) -> bool:
     return False
 
 
-def _create_provider(project: str) -> WorkItemProvider:
+def _create_provider(project: Optional[str] = None) -> WorkItemProvider:
     """
     根据 project 参数创建 Provider
 
     自动判断传入的是 project_key 还是 project_name，并相应处理。
+    如果未提供 project，则使用环境变量 FEISHU_PROJECT_KEY。
 
     Args:
-        project: 项目标识符（可以是 project_key 或 project_name）
+        project: 项目标识符（可以是 project_key 或 project_name），可选
 
     Returns:
         WorkItemProvider 实例
     """
+    if not project:
+        # 使用默认项目（从环境变量读取）
+        logger.debug("Using default project from FEISHU_PROJECT_KEY")
+        return WorkItemProvider()
+    
     if _looks_like_project_key(project):
         logger.debug("Treating '%s' as project_key", project)
         return WorkItemProvider(project_key=project)
@@ -169,8 +175,8 @@ async def list_projects() -> str:
 
 @mcp.tool()
 async def create_task(
-    project: str,
     name: str,
+    project: Optional[str] = None,
     priority: str = "P2",
     description: str = "",
     assignee: Optional[str] = None,
@@ -182,11 +188,11 @@ async def create_task(
     （如将 "P0" 转换为对应的选项 Key）。
 
     Args:
-        project: 项目标识符。可以是:
+        name: 工作项标题，必填。
+        project: 项目标识符（可选）。可以是:
                 - 项目名称（如 "SR6D2VA-7552-Lark"）
                 - project_key（如 "project_xxx"）
-                系统会自动识别并处理。
-        name: 工作项标题，必填。
+                如不指定，则使用环境变量 FEISHU_PROJECT_KEY 配置的默认项目。
         priority: 优先级，可选值: P0(最高), P1, P2(默认), P3(最低)。
         description: 工作项描述，支持纯文本。
         assignee: 负责人的姓名或邮箱。如不指定则为空。
@@ -196,16 +202,12 @@ async def create_task(
         失败时返回错误信息。
 
     Examples:
-        # 使用项目名称创建任务
+        # 使用默认项目创建任务
+        create_task(name="修复登录页面崩溃问题", priority="P0")
+
+        # 指定项目创建任务
         create_task(
             project="SR6D2VA-7552-Lark",
-            name="修复登录页面崩溃问题",
-            priority="P0"
-        )
-
-        # 使用 project_key 创建任务
-        create_task(
-            project="project_xxx",
             name="修复登录页面崩溃问题",
             priority="P0",
             assignee="张三"
@@ -241,7 +243,7 @@ async def create_task(
 
 @mcp.tool()
 async def get_tasks(
-    project: str,
+    project: Optional[str] = None,
     name_keyword: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
@@ -259,9 +261,10 @@ async def get_tasks(
     4. 如果项目不存在某个字段（如状态），会自动跳过该过滤条件
 
     Args:
-        project: 项目标识符。可以是:
+        project: 项目标识符（可选）。可以是:
                 - 项目名称（如 "Project Management"）
                 - project_key（如 "project_xxx"）
+                如不指定，则使用环境变量 FEISHU_PROJECT_KEY 配置的默认项目。
         name_keyword: 任务名称关键词（可选，支持模糊搜索，推荐使用）。
                       例如："SG06VA" 可以搜索所有包含该关键词的任务。
         status: 状态过滤（多个用逗号分隔），如 "待处理,进行中"（可选）。
@@ -275,16 +278,16 @@ async def get_tasks(
         失败时返回错误信息。
 
     Examples:
-        # 获取项目的全部工作项
-        get_tasks(project="Project Management")
+        # 获取默认项目的全部工作项
+        get_tasks()
 
         # 按名称关键词搜索（推荐，高效）
-        get_tasks(project="Project Management", name_keyword="SG06VA")
+        get_tasks(name_keyword="SG06VA")
 
         # 获取指定优先级的任务
-        get_tasks(project="Project Management", priority="P0,P1")
+        get_tasks(priority="P0,P1")
 
-        # 组合多个条件过滤
+        # 指定项目并组合多个条件过滤
         get_tasks(
             project="Project Management",
             name_keyword="SG06VA",
@@ -349,7 +352,7 @@ async def get_tasks(
 
 @mcp.tool()
 async def filter_tasks(
-    project: str,
+    project: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     owner: Optional[str] = None,
@@ -363,7 +366,8 @@ async def filter_tasks(
     字段值会自动转换为 API 所需的格式。
 
     Args:
-        project: 项目标识符。可以是项目名称或 project_key。
+        project: 项目标识符（可选）。可以是项目名称或 project_key。
+                如不指定，则使用环境变量 FEISHU_PROJECT_KEY 配置的默认项目。
         status: 状态过滤（多个用逗号分隔），如 "待处理,进行中"。
         priority: 优先级过滤（多个用逗号分隔），如 "P0,P1"。
         owner: 负责人过滤（姓名或邮箱）。
@@ -377,19 +381,11 @@ async def filter_tasks(
         失败时返回错误信息。
 
     Examples:
-        # 查找所有 P0 优先级的待处理任务
-        filter_tasks(
-            project="SR6D2VA-7552-Lark",
-            status="待处理",
-            priority="P0"
-        )
+        # 查找所有 P0 优先级的待处理任务（使用默认项目）
+        filter_tasks(status="待处理", priority="P0")
 
         # 查找张三负责的所有进行中任务
-        filter_tasks(
-            project="SR6D2VA-7552-Lark",
-            status="进行中",
-            owner="张三"
-        )
+        filter_tasks(status="进行中", owner="张三")
     """
     try:
         logger.info(
@@ -445,8 +441,8 @@ async def filter_tasks(
 
 @mcp.tool()
 async def update_task(
-    project: str,
     issue_id: int,
+    project: Optional[str] = None,
     name: Optional[str] = None,
     priority: Optional[str] = None,
     description: Optional[str] = None,
@@ -460,8 +456,9 @@ async def update_task(
     未提供的字段将保持不变。
 
     Args:
-        project: 项目标识符。可以是项目名称或 project_key。
         issue_id: 要更新的工作项 ID。
+        project: 项目标识符（可选）。可以是项目名称或 project_key。
+                如不指定，则使用环境变量 FEISHU_PROJECT_KEY 配置的默认项目。
         name: 新标题（可选）。
         priority: 新优先级（可选），如 "P0", "P1" 等。
         description: 新描述（可选）。
@@ -473,20 +470,11 @@ async def update_task(
         失败时返回错误信息。
 
     Examples:
-        # 将任务标记为进行中
-        update_task(
-            project="SR6D2VA-7552-Lark",
-            issue_id=12345,
-            status="进行中"
-        )
+        # 将任务标记为进行中（使用默认项目）
+        update_task(issue_id=12345, status="进行中")
 
         # 提升任务优先级并更换负责人
-        update_task(
-            project="SR6D2VA-7552-Lark",
-            issue_id=12345,
-            priority="P0",
-            assignee="李四"
-        )
+        update_task(issue_id=12345, priority="P0", assignee="李四")
     """
     try:
         logger.info(
@@ -521,7 +509,7 @@ async def update_task(
 
 
 @mcp.tool()
-async def get_task_options(project: str, field_name: str) -> str:
+async def get_task_options(field_name: str, project: Optional[str] = None) -> str:
     """
     获取字段的可用选项列表。
 
@@ -529,19 +517,20 @@ async def get_task_options(project: str, field_name: str) -> str:
     这对于了解状态流转、优先级选项等非常有用。
 
     Args:
-        project: 项目标识符。可以是项目名称或 project_key。
         field_name: 字段名称，如 "status", "priority"。
+        project: 项目标识符（可选）。可以是项目名称或 project_key。
+                如不指定，则使用环境变量 FEISHU_PROJECT_KEY 配置的默认项目。
 
     Returns:
         JSON 格式的选项列表，格式为 {label: value}。
         失败时返回错误信息。
 
     Examples:
-        # 查看状态字段有哪些可选值
-        get_task_options(project="SR6D2VA-7552-Lark", field_name="status")
+        # 查看状态字段有哪些可选值（使用默认项目）
+        get_task_options(field_name="status")
 
         # 查看优先级字段有哪些可选值
-        get_task_options(project="SR6D2VA-7552-Lark", field_name="priority")
+        get_task_options(field_name="priority")
     """
     try:
         logger.info(

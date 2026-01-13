@@ -22,4 +22,7 @@ def test_get_tasks_metadata():
     assert "工作项" in tool.description or "task" in tool.description.lower()
     # tool.parameters is the JSON Schema dict
     assert "project" in tool.parameters["properties"]
-    assert tool.parameters["required"] == ["project"]
+    # project is now optional (uses FEISHU_PROJECT_KEY as default)
+    # so required may be empty or not include "project"
+    required = tool.parameters.get("required", [])
+    assert "project" not in required or required == []

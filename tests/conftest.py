@@ -1,9 +1,67 @@
+import json
 import logging
+from pathlib import Path
 import pytest
 import asyncio
 import sys
 
 
+# =============================================================================
+# Pytest Markers Registration
+# =============================================================================
+def pytest_configure(config):
+    """Register custom markers to avoid warnings."""
+    config.addinivalue_line(
+        "markers", "integration: mark test as integration test (requires real Feishu API)"
+    )
+
+
+# =============================================================================
+# Snapshot Fixtures (Track 1 - Snapshot-based Unit Testing)
+# =============================================================================
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "snapshots"
+
+
+@pytest.fixture
+def load_snapshot():
+    """
+    Load a JSON snapshot file from tests/fixtures/snapshots/.
+    
+    Usage:
+        def test_example(load_snapshot):
+            data = load_snapshot("work_item_list.json")
+    """
+    def _load(filename: str) -> dict:
+        filepath = FIXTURES_DIR / filename
+        if not filepath.exists():
+            raise FileNotFoundError(f"Snapshot not found: {filepath}")
+        with open(filepath, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return _load
+
+
+@pytest.fixture
+def save_snapshot():
+    """
+    Save API response as JSON snapshot for Track 1 tests.
+    Used by integration tests to capture real responses.
+    
+    Usage:
+        def test_example(save_snapshot):
+            response = await api.get_items()
+            save_snapshot("work_item_list.json", response)
+    """
+    def _save(filename: str, data: dict) -> None:
+        FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
+        filepath = FIXTURES_DIR / filename
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    return _save
+
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
 # Configure logging for tests
 logging.basicConfig(
     level=logging.DEBUG,

@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:  # 手动触发（用于集成测试）
   issue_comment:
     types: [ created ]
   pull_request_review_comment:
@@ -35,7 +36,33 @@ jobs:
         run: uv sync
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest tests/unit -v
+
+  integration-test:
+    # 集成测试 - 仅手动触发或定时运行
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      LARK_APP_ID: ${{ secrets.LARK_APP_ID }}
+      LARK_APP_SECRET: ${{ secrets.LARK_APP_SECRET }}
+      FEISHU_PROJECT_USER_TOKEN: ${{ secrets.FEISHU_PROJECT_USER_TOKEN }}
+      FEISHU_PROJECT_USER_KEY: ${{ secrets.FEISHU_PROJECT_USER_KEY }}
+      FEISHU_PROJECT_KEY: ${{ secrets.FEISHU_PROJECT_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration -v -m integration
 
   build:
     needs: test
