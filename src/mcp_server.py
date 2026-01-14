@@ -1,19 +1,25 @@
 """
-MCP Server - 飞书 Agent 工具接口
+Author: liangyz liangyz@seirobotics.net
+Date: 2026-01-12 15:48:38
+LastEditors: liangyz liangyz@seirobotics.net
+LastEditTime: 2026-01-14 12:44:01
+FilePath: /feishu_agent/src/mcp_server.py
+Description:
+    MCP Server - 飞书 Agent 工具接口
 
-提供给 LLM 调用的工具集，用于操作飞书项目中的工作项。
+    提供给 LLM 调用的工具集，用于操作飞书项目中的工作项。
 
-工具列表:
-- list_projects: 列出所有可用项目
-- create_task: 创建工作项
-- get_tasks: 获取工作项列表（支持全量或过滤）
-- filter_tasks: 高级过滤查询
-- update_task: 更新工作项
-- get_task_options: 获取字段可用选项
+    工具列表:
+    - list_projects: 列出所有可用项目
+    - create_task: 创建工作项
+    - get_tasks: 获取工作项列表（支持全量或过滤）
+    - filter_tasks: 高级过滤查询
+    - update_task: 更新工作项
+    - get_task_options: 获取字段可用选项
 
-重要说明:
-- 所有工具都支持 project_name（项目名称）参数，会自动转换为 project_key
-- 如果用户提供的是项目名称（如 "SR6D2VA-7552-Lark"），系统会自动查找对应的 project_key
+    重要说明:
+    - 所有工具都支持 project_name（项目名称）参数，会自动转换为 project_key
+    - 如果用户提供的是项目名称（如 "SR6D2VA-7552-Lark"），系统会自动查找对应的 project_key
 """
 
 import json
@@ -110,7 +116,9 @@ def _looks_like_project_key(identifier: str) -> bool:
     return False
 
 
-def _create_provider(project: Optional[str] = None, work_item_type: Optional[str] = None) -> WorkItemProvider:
+def _create_provider(
+    project: Optional[str] = None, work_item_type: Optional[str] = None
+) -> WorkItemProvider:
     """
     根据 project 参数创建 Provider
 
@@ -130,17 +138,21 @@ def _create_provider(project: Optional[str] = None, work_item_type: Optional[str
         if work_item_type:
             return WorkItemProvider(work_item_type_name=work_item_type)
         return WorkItemProvider()
-    
+
     if _looks_like_project_key(project):
         logger.debug("Treating '%s' as project_key", project)
         if work_item_type:
-            return WorkItemProvider(project_key=project, work_item_type_name=work_item_type)
+            return WorkItemProvider(
+                project_key=project, work_item_type_name=work_item_type
+            )
         return WorkItemProvider(project_key=project)
     else:
         # 当作项目名称处理
         logger.debug("Treating '%s' as project_name", project)
         if work_item_type:
-            return WorkItemProvider(project_name=project, work_item_type_name=work_item_type)
+            return WorkItemProvider(
+                project_name=project, work_item_type_name=work_item_type
+            )
         return WorkItemProvider(project_name=project)
 
 
@@ -338,20 +350,25 @@ async def get_tasks(
                 else:
                     # 非数字字符串：按名称搜索工作项
                     logger.info("Resolving related_to from name: '%s'", related_to)
-                    
+
                     # 在常见工作项类型中搜索
-                    search_types = ["项目管理", "需求管理", "Issue管理", "任务", "Epic", "事务管理"]
+                    search_types = [
+                        "项目管理",
+                        "需求管理",
+                        "Issue管理",
+                        "任务",
+                        "Epic",
+                        "事务管理",
+                    ]
                     found_item = None
-                    
+
                     for search_type in search_types:
                         try:
                             temp_provider = _create_provider(project, search_type)
                             search_result = await temp_provider.get_tasks(
-                                name_keyword=related_to,
-                                page_num=1,
-                                page_size=10
+                                name_keyword=related_to, page_num=1, page_size=10
                             )
-                            
+
                             items = search_result.get("items", [])
                             if items:
                                 # 优先精确匹配
@@ -362,10 +379,10 @@ async def get_tasks(
                                             "Found exact match: '%s' (ID: %s, Type: %s)",
                                             item.get("name"),
                                             item.get("id"),
-                                            search_type
+                                            search_type,
                                         )
                                         break
-                                
+
                                 # 如果没有精确匹配，取第一个部分匹配
                                 if not found_item:
                                     found_item = items[0]
@@ -373,27 +390,27 @@ async def get_tasks(
                                         "Found partial match: '%s' (ID: %s, Type: %s)",
                                         found_item.get("name"),
                                         found_item.get("id"),
-                                        search_type
+                                        search_type,
                                     )
                                 break
                         except Exception as e:
                             logger.debug(
-                                "Failed to search in type '%s': %s",
-                                search_type,
-                                e
+                                "Failed to search in type '%s': %s", search_type, e
                             )
                             continue
-                    
+
                     if found_item:
                         related_to_id = found_item.get("id")
                         logger.info(
                             "Resolved related_to '%s' -> ID: %s",
                             related_to,
-                            related_to_id
+                            related_to_id,
                         )
                     else:
-                        return f"未找到名称为 '{related_to}' 的工作项，请检查名称是否正确"
-                        
+                        return (
+                            f"未找到名称为 '{related_to}' 的工作项，请检查名称是否正确"
+                        )
+
             elif isinstance(related_to, int):
                 # 整数：直接使用
                 related_to_id = related_to
