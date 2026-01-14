@@ -22,12 +22,14 @@ Description:
     - 如果用户提供的是项目名称（如 "SR6D2VA-7552-Lark"），系统会自动查找对应的 project_key
 """
 
-import httpx
+import re
 import json
 import logging
 import sys
 from pathlib import Path
 from typing import Optional
+
+import httpx
 
 from mcp.server.fastmcp import FastMCP
 
@@ -51,6 +53,98 @@ def _mask_project(project: Optional[str]) -> str:
         return f"project_{project[8:12]}***" if len(project) > 12 else "project_***"
     # 项目名称只显示前4个字符
     return _mask_sensitive(project)
+
+
+# 业务错误关键词（应透传给用户）
+_BUSINESS_ERROR_KEYWORDS = frozenset(
+    [
+        "工作项类型",
+        "项目",
+        "用户",
+        "字段",
+        "选项",
+        "权限",
+        "不存在",
+        "未找到",
+        "无效",
+        "不允许",
+        "不支持",
+        "可用类型",
+    ]
+)
+
+# 堆栈跟踪特征（应隐藏）
+_STACK_TRACE_INDICATORS = ('File "', "line ", "Traceback", "at 0x")
+
+
+def _mask_sensitive_in_error(error_msg: str) -> str:
+    """
+    对错误信息中的敏感数据进行脱敏
+
+    替换可能暴露内部实现的敏感标识符，如 project_key、user_key 等。
+
+    Args:
+        error_msg: 原始错误信息
+
+    Returns:
+        脱敏后的错误信息
+    """
+    # 替换 project_key 格式 (project_ 后跟字母数字下划线)
+    error_msg = re.sub(r"project_[a-zA-Z0-9_]+", "project_***", error_msg)
+    # 替换 user_ 开头的标识符
+    error_msg = re.sub(r"user_[a-zA-Z0-9_]+", "user_***", error_msg)
+    # 替换可能的长十六进制密钥 (32位及以上)
+    error_msg = re.sub(r"[a-fA-F0-9]{32,}", "***", error_msg)
+    return error_msg
+
+
+def _extract_safe_error_message(exc: Exception, max_length: int = 200) -> str:
+    """
+    从异常中提取安全的错误消息，移除堆栈跟踪
+
+    Args:
+        exc: 异常对象
+        max_length: 最大返回长度
+
+    Returns:
+        安全的错误消息字符串
+    """
+    error_str = str(exc)
+
+    # 移除堆栈跟踪：遇到堆栈特征时截断
+    lines = error_str.split("\n")
+    safe_lines = []
+    for line in lines:
+        stripped = line.strip()
+        # 检测堆栈跟踪开始
+        if stripped.startswith(('File "', "Traceback", "    at ")):
+            break
+        safe_lines.append(line)
+
+    result = " ".join(safe_lines[:3]).strip()
+    return result[:max_length] if len(result) > max_length else result
+
+
+def _should_expose_error(error_msg: str) -> bool:
+    """
+    判断是否应该将错误信息透传给用户
+
+    某些错误信息对用户有帮助（如可用类型列表），应该透传而非隐藏。
+    包含堆栈跟踪的错误应该隐藏。
+
+    Args:
+        error_msg: 异常的字符串表示
+
+    Returns:
+        True: 应该透传给用户（脱敏后）
+        False: 应该返回通用错误信息
+    """
+    # 检查是否包含堆栈跟踪（应该隐藏）
+    if any(indicator in error_msg for indicator in _STACK_TRACE_INDICATORS):
+        return False
+
+    # 检查是否包含业务错误关键词
+    return any(keyword in error_msg for keyword in _BUSINESS_ERROR_KEYWORDS)
 
 
 # 在模块级别配置日志（确保在 logger 创建前配置）
@@ -161,6 +255,11 @@ async def list_projects() -> str:
         logger.error("Failed to list projects: %s", e, exc_info=True)
         return f"获取项目列表失败: {str(e)}"
     except Exception as e:
+        # 提取安全的错误信息，移除堆栈跟踪
+        error_msg = _extract_safe_error_message(e)
+        if _should_expose_error(error_msg):
+            # 透传前进行敏感信息脱敏
+            return f"获取项目列表失败: {_mask_sensitive_in_error(error_msg)}"
         # 捕获其他未知异常，但记录完整信息以便调试
         logger.critical("Unexpected error listing projects: %s", e, exc_info=True)
         return "获取项目列表失败: 系统内部错误"
@@ -170,6 +269,7 @@ async def list_projects() -> str:
 async def create_task(
     name: str,
     project: Optional[str] = None,
+    work_item_type: Optional[str] = None,
     priority: str = "P2",
     description: str = "",
     assignee: Optional[str] = None,
@@ -186,6 +286,8 @@ async def create_task(
                 - 项目名称（如 "SR6D2VA-7552-Lark"）
                 - project_key（如 "project_xxx"）
                 如不指定，则使用环境变量 FEISHU_PROJECT_KEY 配置的默认项目。
+        work_item_type: 工作项类型名称（可选），如 "需求管理"、"Issue管理"、"项目管理" 等。
+                       如不指定，默认使用项目中的第一个可用类型。
         priority: 优先级，可选值: P0(最高), P1, P2(默认), P3(最低)。
         description: 工作项描述，支持纯文本。
         assignee: 负责人的姓名或邮箱。如不指定则为空。
@@ -198,9 +300,10 @@ async def create_task(
         # 使用默认项目创建任务
         create_task(name="修复登录页面崩溃问题", priority="P0")
 
-        # 指定项目创建任务
+        # 指定项目和工作项类型创建任务
         create_task(
             project="SR6D2VA-7552-Lark",
+            work_item_type="Issue管理",
             name="修复登录页面崩溃问题",
             priority="P0",
             assignee="张三"
@@ -209,13 +312,14 @@ async def create_task(
     try:
         # 日志脱敏：不记录完整的项目标识符和任务名称
         logger.info(
-            "Creating task: project=%s, name_len=%d, priority=%s, has_assignee=%s",
+            "Creating task: project=%s, work_item_type=%s, name_len=%d, priority=%s, has_assignee=%s",
             _mask_project(project),
+            work_item_type,
             len(name) if name else 0,
             priority,
             bool(assignee),
         )
-        provider = _create_provider(project)
+        provider = _create_provider(project, work_item_type)
         issue_id = await provider.create_issue(
             name=name,
             priority=priority,
@@ -233,6 +337,9 @@ async def create_task(
         )
         return f"创建失败: {str(e)}"
     except Exception as e:
+        error_msg = _extract_safe_error_message(e)
+        if _should_expose_error(error_msg):
+            return f"创建失败: {_mask_sensitive_in_error(error_msg)}"
         logger.critical(
             "Unexpected error creating task: project=%s, error=%s",
             _mask_project(project),
@@ -388,6 +495,9 @@ async def get_tasks(
         )
         return f"获取任务列表失败: {str(e)}"
     except Exception as e:
+        error_msg = _extract_safe_error_message(e)
+        if _should_expose_error(error_msg):
+            return f"获取任务列表失败: {_mask_sensitive_in_error(error_msg)}"
         logger.critical(
             "Unexpected error getting tasks: project=%s, error=%s",
             _mask_project(project),
@@ -400,6 +510,7 @@ async def get_tasks(
 @mcp.tool()
 async def filter_tasks(
     project: Optional[str] = None,
+    work_item_type: Optional[str] = None,
     status: Optional[str] = None,
     priority: Optional[str] = None,
     owner: Optional[str] = None,
@@ -418,6 +529,8 @@ async def filter_tasks(
     Args:
         project: 项目标识符（可选）。可以是项目名称或 project_key。
                 如不指定，则使用环境变量 FEISHU_PROJECT_KEY 配置的默认项目。
+        work_item_type: 工作项类型名称（可选），如 "需求管理"、"Issue管理"、"项目管理" 等。
+                       如不指定，默认使用项目中的第一个可用类型。
         status: 状态过滤（多个用逗号分隔），如 "待处理,进行中"。
         priority: 优先级过滤（多个用逗号分隔），如 "P0,P1"。
         owner: 负责人过滤（姓名或邮箱）。
@@ -436,18 +549,22 @@ async def filter_tasks(
 
         # 查找张三负责的所有进行中任务
         filter_tasks(status="进行中", owner="张三")
+
+        # 指定工作项类型过滤
+        filter_tasks(project="Project Management", work_item_type="需求管理", status="进行中")
     """
     try:
         logger.info(
-            "Filtering tasks: project=%s, status=%s, priority=%s, has_owner=%s, page=%d/%d",
+            "Filtering tasks: project=%s, work_item_type=%s, status=%s, priority=%s, has_owner=%s, page=%d/%d",
             _mask_project(project),
+            work_item_type,
             status,
             priority,
             bool(owner),
             page_num,
             page_size,
         )
-        provider = _create_provider(project)
+        provider = _create_provider(project, work_item_type)
 
         # 解析逗号分隔的过滤条件
         status_list = [s.strip() for s in status.split(",")] if status else None
@@ -489,6 +606,9 @@ async def filter_tasks(
         )
         return f"过滤失败: {str(e)}"
     except Exception as e:
+        error_msg = _extract_safe_error_message(e)
+        if _should_expose_error(error_msg):
+            return f"过滤失败: {_mask_sensitive_in_error(error_msg)}"
         logger.critical(
             "Unexpected error filtering tasks: project=%s, error=%s",
             _mask_project(project),
@@ -502,6 +622,7 @@ async def filter_tasks(
 async def update_task(
     issue_id: int,
     project: Optional[str] = None,
+    work_item_type: Optional[str] = None,
     name: Optional[str] = None,
     priority: Optional[str] = None,
     description: Optional[str] = None,
@@ -518,6 +639,8 @@ async def update_task(
         issue_id: 要更新的工作项 ID。
         project: 项目标识符（可选）。可以是项目名称或 project_key。
                 如不指定，则使用环境变量 FEISHU_PROJECT_KEY 配置的默认项目。
+        work_item_type: 工作项类型名称（可选），如 "需求管理"、"Issue管理"、"项目管理" 等。
+                       如不指定，默认使用项目中的第一个可用类型。
         name: 新标题（可选）。
         priority: 新优先级（可选），如 "P0", "P1" 等。
         description: 新描述（可选）。
@@ -534,18 +657,22 @@ async def update_task(
 
         # 提升任务优先级并更换负责人
         update_task(issue_id=12345, priority="P0", assignee="李四")
+
+        # 指定工作项类型更新
+        update_task(issue_id=12345, work_item_type="需求管理", status="已完成")
     """
     try:
         logger.info(
-            "Updating task: project=%s, issue_id=%d, has_name=%s, priority=%s, status=%s, has_assignee=%s",
+            "Updating task: project=%s, work_item_type=%s, issue_id=%d, has_name=%s, priority=%s, status=%s, has_assignee=%s",
             _mask_project(project),
+            work_item_type,
             issue_id,
             bool(name),
             priority,
             status,
             bool(assignee),
         )
-        provider = _create_provider(project)
+        provider = _create_provider(project, work_item_type)
         await provider.update_issue(
             issue_id=issue_id,
             name=name,
@@ -566,6 +693,9 @@ async def update_task(
         )
         return f"更新失败: {str(e)}"
     except Exception as e:
+        error_msg = _extract_safe_error_message(e)
+        if _should_expose_error(error_msg):
+            return f"更新失败: {_mask_sensitive_in_error(error_msg)}"
         logger.critical(
             "Unexpected error updating task: project=%s, issue_id=%d, error=%s",
             _mask_project(project),
@@ -577,7 +707,11 @@ async def update_task(
 
 
 @mcp.tool()
-async def get_task_options(field_name: str, project: Optional[str] = None) -> str:
+async def get_task_options(
+    field_name: str,
+    project: Optional[str] = None,
+    work_item_type: Optional[str] = None,
+) -> str:
     """
     获取字段的可用选项列表。
 
@@ -588,6 +722,8 @@ async def get_task_options(field_name: str, project: Optional[str] = None) -> st
         field_name: 字段名称，如 "status", "priority"。
         project: 项目标识符（可选）。可以是项目名称或 project_key。
                 如不指定，则使用环境变量 FEISHU_PROJECT_KEY 配置的默认项目。
+        work_item_type: 工作项类型名称（可选），如 "需求管理"、"Issue管理"、"项目管理" 等。
+                       如不指定，默认使用项目中的第一个可用类型。
 
     Returns:
         JSON 格式的选项列表，格式为 {label: value}。
@@ -599,14 +735,18 @@ async def get_task_options(field_name: str, project: Optional[str] = None) -> st
 
         # 查看优先级字段有哪些可选值
         get_task_options(field_name="priority")
+
+        # 指定工作项类型查看选项
+        get_task_options(field_name="status", project="Project Management", work_item_type="需求管理")
     """
     try:
         logger.info(
-            "Getting task options: project=%s, field_name=%s",
+            "Getting task options: project=%s, work_item_type=%s, field_name=%s",
             _mask_project(project),
+            work_item_type,
             field_name,
         )
-        provider = _create_provider(project)
+        provider = _create_provider(project, work_item_type)
         options = await provider.list_available_options(field_name)
 
         logger.info("Retrieved %d options for field '%s'", len(options), field_name)
@@ -625,6 +765,9 @@ async def get_task_options(field_name: str, project: Optional[str] = None) -> st
         )
         return f"获取选项失败: {str(e)}"
     except Exception as e:
+        error_msg = _extract_safe_error_message(e)
+        if _should_expose_error(error_msg):
+            return f"获取选项失败: {_mask_sensitive_in_error(error_msg)}"
         logger.critical(
             "Unexpected error getting options: project=%s, field_name=%s, error=%s",
             _mask_project(project),

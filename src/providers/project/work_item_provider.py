@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Union
 
@@ -42,6 +43,10 @@ class WorkItemProvider(Provider):
         self.api = WorkItemAPI()
         self.meta = MetadataManager.get_instance()
 
+        # 线程安全：用于保护类型 Key 解析的锁和缓存
+        self._type_key_lock = asyncio.Lock()
+        self._resolved_type_key: Optional[str] = None
+
     async def _get_project_key(self) -> str:
         if not self._project_key:
             if self.project_name:
@@ -51,9 +56,51 @@ class WorkItemProvider(Provider):
         return self._project_key
 
     async def _get_type_key(self) -> str:
-        """获取工作项类型 Key"""
-        project_key = await self._get_project_key()
-        return await self.meta.get_type_key(project_key, self.work_item_type_name)
+        """
+        获取工作项类型 Key（线程安全）
+
+        使用锁保护状态检查和修改，避免竞态条件。
+        当指定的类型不存在时，如果使用的是默认类型 "问题管理"，
+        会自动 fallback 到项目中的第一个可用类型。
+
+        Returns:
+            工作项类型 Key
+
+        Raises:
+            ValueError: 当类型不存在且无法 fallback 时
+        """
+        async with self._type_key_lock:
+            # 快速路径：已解析过则直接返回缓存
+            if self._resolved_type_key is not None:
+                return self._resolved_type_key
+
+            project_key = await self._get_project_key()
+
+            try:
+                self._resolved_type_key = await self.meta.get_type_key(
+                    project_key, self.work_item_type_name
+                )
+                return self._resolved_type_key
+            except (ValueError, KeyError) as e:
+                # 仅当使用默认类型 "问题管理" 时才尝试 fallback
+                if self.work_item_type_name != "问题管理":
+                    raise
+
+                types = await self.meta.list_types(project_key)
+                if not types:
+                    raise ValueError(
+                        f"项目 {project_key} 中没有可用的工作项类型"
+                    ) from e
+
+                # 使用 items() 同时获取 key 和 value，更 Pythonic
+                first_type_name, first_type_key = next(iter(types.items()))
+                logger.warning(
+                    "默认类型 '问题管理' 不存在，临时使用 '%s' 替代",
+                    first_type_name,
+                )
+                # 缓存解析结果，避免后续调用再次触发 fallback
+                self._resolved_type_key = first_type_key
+                return self._resolved_type_key
 
     async def _field_exists(
         self, project_key: str, type_key: str, field_name: str
@@ -73,8 +120,8 @@ class WorkItemProvider(Provider):
         try:
             await self.meta.get_field_key(project_key, type_key, field_name)
             return True
-        except Exception as e:
-            logger.debug(f"Field '{field_name}' not found: {e}")
+        except (ValueError, KeyError) as e:
+            logger.debug("Field '%s' not found: %s", field_name, e)
             return False
 
     def _extract_field_value(self, item: dict, field_key: str) -> Optional[str]:

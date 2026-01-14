@@ -359,13 +359,17 @@ class TestProviderExceptionHandling:
         mock_metadata.get_type_key.side_effect = ValueError(
             "工作项类型 'Unknown' 不存在"
         )
+        # 当使用默认类型 "问题管理" 时，fallback 逻辑会尝试获取可用类型
+        # 返回空字典模拟没有可用类型的情况
+        mock_metadata.list_types.return_value = {}
 
         provider = WorkItemProvider("My Project")
 
         with pytest.raises(ValueError) as exc_info:
             await provider.create_issue(name="Test")
 
-        assert "不存在" in str(exc_info.value)
+        # 新的错误信息格式：没有可用的工作项类型
+        assert "没有可用的工作项类型" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_api_error_propagation(self, mock_work_item_api, mock_metadata):
