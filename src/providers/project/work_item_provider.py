@@ -140,6 +140,10 @@ class WorkItemProvider(Provider):
         """
         从工作项中提取字段值（辅助方法）
 
+        支持两种数据结构：
+        1. field_value_pairs: 旧版结构，字段以键值对列表形式存在
+        2. fields: 新版结构，字段以对象列表形式存在
+
         Args:
             item: 工作项字典
             field_key: 字段 Key
@@ -147,40 +151,138 @@ class WorkItemProvider(Provider):
         Returns:
             字段值（字符串），如果不存在则返回 None
         """
-        field_pairs = item.get("field_value_pairs", [])
-        for pair in field_pairs:
-            if pair.get("field_key") == field_key:
-                value = pair.get("field_value")
+        logger.debug(
+            "_extract_field_value: Looking for field_key='%s' in item id=%s",
+            field_key,
+            item.get("id"),
+        )
+
+        # 首先尝试从 fields 数组中查找
+        fields = item.get("fields", [])
+        logger.debug(
+            "_extract_field_value: fields count=%d, available field_keys=%s",
+            len(fields),
+            [f.get("field_key") for f in fields],
+        )
+        for field in fields:
+            if field.get("field_key") == field_key:
+                value = field.get("field_value")
+                logger.debug("_extract_field_value: Found field, value=%s", value)
                 # 处理选项类型字段
                 if isinstance(value, dict):
-                    return value.get("label") or value.get("value")
+                    result = value.get("label") or value.get("value")
+                    logger.debug(
+                        "_extract_field_value: Extracted from dict: %s", result
+                    )
+                    return result
                 # 处理用户类型字段
                 if isinstance(value, list) and value:
                     first = value[0]
                     if isinstance(first, dict):
-                        return first.get("name") or first.get("name_cn")
-                return str(value) if value else None
+                        result = first.get("name") or first.get("name_cn")
+                        logger.debug(
+                            "_extract_field_value: Extracted from user list: %s", result
+                        )
+                        return result
+                result = str(value) if value else None
+                logger.debug("_extract_field_value: Extracted as string: %s", result)
+                return result
+
+        # 回退到 field_value_pairs
+        field_pairs = item.get("field_value_pairs", [])
+        logger.debug(
+            "_extract_field_value: field_value_pairs count=%d", len(field_pairs)
+        )
+        for pair in field_pairs:
+            if pair.get("field_key") == field_key:
+                value = pair.get("field_value")
+                logger.debug("_extract_field_value: Found in pairs, value=%s", value)
+                # 处理选项类型字段
+                if isinstance(value, dict):
+                    result = value.get("label") or value.get("value")
+                    logger.debug(
+                        "_extract_field_value: Extracted from dict (pairs): %s", result
+                    )
+                    return result
+                # 处理用户类型字段
+                if isinstance(value, list) and value:
+                    first = value[0]
+                    if isinstance(first, dict):
+                        result = first.get("name") or first.get("name_cn")
+                        logger.debug(
+                            "_extract_field_value: Extracted from user list (pairs): %s",
+                            result,
+                        )
+                        return result
+                result = str(value) if value else None
+                logger.debug(
+                    "_extract_field_value: Extracted as string (pairs): %s", result
+                )
+                return result
+
+        logger.debug("_extract_field_value: Field key '%s' not found", field_key)
         return None
 
-    def simplify_work_item(self, item: dict) -> dict:
+    async def simplify_work_item(
+        self, item: dict, field_mapping: Optional[Dict[str, str]] = None
+    ) -> dict:
         """
         将工作项简化为摘要格式，减少 Token 消耗
 
         Args:
             item: 原始工作项字典
+            field_mapping: 字段名称到字段Key的映射（可选）
 
         Returns:
             简化后的工作项字典，包含 id, name, status, priority, owner
         """
+
+        # 使用field_mapping获取实际的字段Key，如果没有映射则使用字段名称作为Key
+        def get_field_key(field_name: str) -> str:
+            if field_mapping and field_name in field_mapping:
+                return field_mapping[field_name]
+            return field_name
+
+        priority_key = get_field_key("priority")
+        priority_value = self._extract_field_value(item, priority_key)
+
+        logger.info(
+            "simplify_work_item: item id=%s, keys=%s, field_mapping=%s, priority_key=%s, priority_value=%s",
+            item.get("id"),
+            list(item.keys()),
+            field_mapping,
+            priority_key,
+            priority_value,
+        )
+
+        if "fields" in item:
+            fields = item.get("fields", [])
+            logger.info(
+                "simplify_work_item: fields count=%d, field_keys=%s",
+                len(fields),
+                [f.get("field_key") for f in fields],
+            )
+            for field in fields:
+                if field.get("field_key") == priority_key:
+                    logger.info("simplify_work_item: found priority field: %s", field)
+        elif "field_value_pairs" in item:
+            pairs = item.get("field_value_pairs", [])
+            logger.info("simplify_work_item: field_value_pairs count=%d", len(pairs))
+            for pair in pairs:
+                if pair.get("field_key") == priority_key:
+                    logger.info("simplify_work_item: found priority in pairs: %s", pair)
+
         return {
             "id": item.get("id"),
             "name": item.get("name"),
-            "status": self._extract_field_value(item, "status"),
-            "priority": self._extract_field_value(item, "priority"),
-            "owner": self._extract_field_value(item, "owner"),
+            "status": self._extract_field_value(item, get_field_key("status")),
+            "priority": priority_value,
+            "owner": self._extract_field_value(item, get_field_key("owner")),
         }
 
-    def simplify_work_items(self, items: List[dict]) -> List[dict]:
+    async def simplify_work_items(
+        self, items: List[dict], field_mapping: Optional[Dict[str, str]] = None
+    ) -> List[dict]:
         """
         批量简化工作项列表
 
@@ -190,7 +292,19 @@ class WorkItemProvider(Provider):
         Returns:
             简化后的工作项列表
         """
-        return [self.simplify_work_item(item) for item in items]
+        logger.info("simplify_work_items: processing %d items", len(items))
+        if items:
+            logger.info("First item keys: %s", list(items[0].keys()))
+            if "fields" in items[0]:
+                fields = items[0].get("fields", [])
+                logger.info(
+                    "First item fields count: %d, field_keys: %s",
+                    len(fields),
+                    [f.get("field_key") for f in fields],
+                )
+        # 并行简化所有工作项
+        tasks = [self.simplify_work_item(item, field_mapping) for item in items]
+        return await asyncio.gather(*tasks)
 
     async def resolve_related_to(
         self, related_to: Union[int, str], project: Optional[str] = None
@@ -346,9 +460,7 @@ class WorkItemProvider(Provider):
         project_key = await self._get_project_key()
         type_key = await self._get_type_key()
 
-        logger.info(
-            "Creating Issue in Project: %s, Type: %s", project_key, type_key
-        )
+        logger.info("Creating Issue in Project: %s, Type: %s", project_key, type_key)
 
         # 1. Prepare fields for creation (minimal set)
         create_fields = []
@@ -634,7 +746,7 @@ class WorkItemProvider(Provider):
                 list(work_items_to_fetch), project_key, type_key
             )
             work_item_map.update(cached_map)
-            
+
             # 如果有未找到的工作项，尝试其他所有类型
             if not_found_ids:
                 remaining_ids = set(not_found_ids)
@@ -725,12 +837,18 @@ class WorkItemProvider(Provider):
             readable_val = f_val
 
             # 用户字段处理（根据类型或字段键判断）
-            user_field_keys = ["owner", "creator", "modifier", "assignee", "created_by", "updated_by"]
-            is_user_field = (
-                f_type in ["user", "owner", "creator", "modifier"] or
-                (f_type == "unknown" and f_key in user_field_keys)
+            user_field_keys = [
+                "owner",
+                "creator",
+                "modifier",
+                "assignee",
+                "created_by",
+                "updated_by",
+            ]
+            is_user_field = f_type in ["user", "owner", "creator", "modifier"] or (
+                f_type == "unknown" and f_key in user_field_keys
             )
-            
+
             # 转换值
             if f_val is not None:
                 if is_user_field:
@@ -801,16 +919,16 @@ class WorkItemProvider(Provider):
     def _extract_readable_field_value(self, field_value: Any) -> Any:
         """
         提取可读的字段值，特别处理用户相关字段
-        
+
         Args:
             field_value: 原始字段值
-            
+
         Returns:
             可读的字段值，如果无法提取则返回原始值
         """
         if field_value is None:
             return None
-            
+
         # 如果是字典且包含 label 或 name 字段，优先返回这些
         if isinstance(field_value, dict):
             if "label" in field_value:
@@ -821,13 +939,13 @@ class WorkItemProvider(Provider):
                 return field_value["name_cn"]
             # 如果字典中没有可读字段，返回整个字典（可能是复杂对象）
             return field_value
-            
+
         # 如果是列表，处理每个元素
         if isinstance(field_value, list):
             # 空列表返回空列表
             if not field_value:
                 return field_value
-                
+
             # 单元素列表且元素是字典：尝试提取可读值
             if len(field_value) == 1 and isinstance(field_value[0], dict):
                 single_item = field_value[0]
@@ -837,7 +955,7 @@ class WorkItemProvider(Provider):
                         return single_item[key]
                 # 如果没有可读键，返回整个字典
                 return single_item
-            
+
             # 多元素列表：处理每个元素
             readable_items = []
             for item in field_value:
@@ -845,7 +963,7 @@ class WorkItemProvider(Provider):
                 if readable_item is not None:
                     readable_items.append(readable_item)
             return readable_items if readable_items else field_value
-            
+
         # 其他类型直接返回
         return field_value
 
@@ -903,9 +1021,7 @@ class WorkItemProvider(Provider):
 
         if update_fields:
             await self.api.update(project_key, type_key, issue_id, update_fields)
-            logger.info(
-                "Updated Issue %d with %d fields", issue_id, len(update_fields)
-            )
+            logger.info("Updated Issue %d with %d fields", issue_id, len(update_fields))
 
     async def delete_issue(self, issue_id: int) -> None:
         """删除 Issue"""
@@ -1027,9 +1143,14 @@ class WorkItemProvider(Provider):
                 )
 
         # 构建 search_group
-        search_group = {"conjunction": "AND", "conditions": conditions}
+        search_group = {
+            "conjunction": "AND",
+            "search_params": conditions,
+            "search_groups": [],
+        }
 
         logger.info("Filtering issues with conditions: %s", conditions)
+        logger.debug("filter_issues: Built search_group: %s", search_group)
 
         # 调用 API
         result = await self.api.search_params(
@@ -1141,31 +1262,34 @@ class WorkItemProvider(Provider):
                 # 确定本次并发请求的页码范围
                 end_page = min(current_page + CONCURRENT_PAGES, MAX_PAGES + 1)
                 page_range = range(current_page, end_page)
-                
+
                 tasks = []
                 for p in page_range:
-                    tasks.append(self.api.filter(
-                        project_key=project_key,
-                        work_item_type_keys=[type_key],
-                        page_num=p,
-                        page_size=BATCH_SIZE,
-                    ))
+                    tasks.append(
+                        self.api.filter(
+                            project_key=project_key,
+                            work_item_type_keys=[type_key],
+                            page_num=p,
+                            page_size=BATCH_SIZE,
+                        )
+                    )
 
                 logger.info(
-                    "Fetching pages %d to %d concurrently...", 
-                    current_page, end_page - 1
+                    "Fetching pages %d to %d concurrently...",
+                    current_page,
+                    end_page - 1,
                 )
-                
+
                 # 并发执行请求
                 results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 # 处理结果
                 batch_items_count = 0
                 should_stop = False
-                
+
                 for i, result in enumerate(results):
                     page_num = current_page + i
-                    
+
                     if isinstance(result, Exception):
                         logger.error("Failed to fetch page %d: %s", page_num, result)
                         continue
@@ -1181,7 +1305,7 @@ class WorkItemProvider(Provider):
                     if not items:
                         should_stop = True
                         # 不break，继续处理其他成功页面的结果
-                    
+
                     batch_items_count += len(items)
                     total_fetched += len(items)
 
@@ -1201,7 +1325,7 @@ class WorkItemProvider(Provider):
                                     break
                         if is_related:
                             found_items.append(item)
-                    
+
                     # 如果某一页的数据少于 BATCH_SIZE，说明已经是最后一页
                     if len(items) < BATCH_SIZE:
                         should_stop = True
@@ -1474,11 +1598,30 @@ class WorkItemProvider(Provider):
                 )
 
         # 构建 search_group
-        search_group = {"conjunction": "AND", "conditions": conditions}
+        search_group = {
+            "conjunction": "AND",
+            "search_params": conditions,
+            "search_groups": [],
+        }
 
         logger.info(
             f"Querying tasks with {len(conditions)} conditions, page_num={page_num}, page_size={page_size}"
         )
+        logger.debug("get_tasks: Built search_group: %s", search_group)
+
+        # 构建需要返回的字段列表
+        fields_to_fetch = []
+        if status or priority or owner or related_to:
+            # 我们需要这些字段进行客户端过滤或显示
+            needed_fields = ["priority", "status", "owner"]
+            for field_name in needed_fields:
+                try:
+                    field_key = await self.meta.get_field_key(
+                        project_key, type_key, field_name
+                    )
+                    fields_to_fetch.append(field_key)
+                except Exception as e:
+                    logger.debug("Failed to get field key for '%s': %s", field_name, e)
 
         # 调用 API
         result = await self.api.search_params(
@@ -1487,6 +1630,7 @@ class WorkItemProvider(Provider):
             search_group=search_group,
             page_num=page_num,
             page_size=page_size,
+            fields=fields_to_fetch if fields_to_fetch else None,
         )
 
         # 标准化返回结果
@@ -1561,7 +1705,7 @@ class WorkItemProvider(Provider):
     def clear_user_cache(self) -> None:
         """
         清理用户缓存
-        
+
         当用户信息发生变化时调用此方法
         """
         self._user_cache.clear()
@@ -1570,7 +1714,7 @@ class WorkItemProvider(Provider):
     def clear_work_item_cache(self) -> None:
         """
         清理工作项缓存
-        
+
         当工作项信息发生变化时调用此方法
         """
         self._work_item_cache.clear()

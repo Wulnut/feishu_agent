@@ -469,8 +469,28 @@ async def get_tasks(
             logger.error("Unexpected result type: %s, value: %s", type(result), result)
             return "获取任务列表失败: 返回数据格式错误"
 
+        # 构建字段映射（字段名称 -> 字段Key）
+        field_mapping = {}
+        try:
+            project_key = await provider._get_project_key()
+            type_key = await provider._get_type_key()
+            # 尝试获取常用字段的Key
+            for field_name in ["priority", "status", "owner"]:
+                try:
+                    field_key = await provider.meta.get_field_key(
+                        project_key, type_key, field_name
+                    )
+                    field_mapping[field_name] = field_key
+                    logger.debug("Field mapping %s -> %s", field_name, field_key)
+                except Exception as e:
+                    logger.debug("Field '%s' not found: %s", field_name, e)
+        except Exception as e:
+            logger.warning("Failed to build field mapping: %s", e)
+
         # 简化返回结果
-        simplified = provider.simplify_work_items(result.get("items", []))
+        simplified = await provider.simplify_work_items(
+            result.get("items", []), field_mapping
+        )
 
         logger.info(
             "Retrieved %d tasks (total: %d)", len(simplified), result.get("total", 0)
