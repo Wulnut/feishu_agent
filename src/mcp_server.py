@@ -81,7 +81,7 @@ def _mask_sensitive_in_error(error_msg: str) -> str:
     """
     对错误信息中的敏感数据进行脱敏
 
-    替换可能暴露内部实现的敏感标识符，如 project_key、user_key 等。
+    替换可能暴露内部实现的敏感标识符，如 project_key、user_key、token 等。
 
     Args:
         error_msg: 原始错误信息
@@ -95,7 +95,61 @@ def _mask_sensitive_in_error(error_msg: str) -> str:
     error_msg = re.sub(r"user_[a-zA-Z0-9_]+", "user_***", error_msg)
     # 替换可能的长十六进制密钥 (32位及以上)
     error_msg = re.sub(r"[a-fA-F0-9]{32,}", "***", error_msg)
+    # 替换 token/secret/key 相关的敏感值 (case insensitive)
+    error_msg = re.sub(
+        r"(?i)(token|secret|key|authorization)[=:\s]+[^\s,;\"']+",
+        r"\1=***",
+        error_msg,
+    )
     return error_msg
+
+
+def _error_response(
+    operation: str,
+    error_msg: str,
+    error_code: Optional[str] = None,
+) -> str:
+    """
+    生成统一的错误响应 JSON
+
+    Args:
+        operation: 操作名称，如 "创建任务"、"获取列表"
+        error_msg: 错误信息（会自动脱敏）
+        error_code: 错误码（可选），如 "ERR_HTTP"、"ERR_VALIDATION"
+
+    Returns:
+        JSON 格式的错误响应字符串
+    """
+    safe_msg = _mask_sensitive_in_error(error_msg)
+    response = {
+        "success": False,
+        "error": {
+            "message": f"{operation}失败: {safe_msg}",
+        },
+    }
+    if error_code:
+        response["error"]["code"] = error_code
+    return json.dumps(response, ensure_ascii=False, indent=2)
+
+
+def _success_response(data: dict, message: Optional[str] = None) -> str:
+    """
+    生成统一的成功响应 JSON
+
+    Args:
+        data: 响应数据
+        message: 可选的提示信息
+
+    Returns:
+        JSON 格式的成功响应字符串
+    """
+    response = {
+        "success": True,
+        "data": data,
+    }
+    if message:
+        response["message"] = message
+    return json.dumps(response, ensure_ascii=False, indent=2)
 
 
 def _extract_safe_error_message(exc: Exception, max_length: int = 200) -> str:
@@ -180,6 +234,45 @@ def _is_project_key_format(identifier: str) -> bool:
     return bool(identifier and identifier.startswith("project_"))
 
 
+def _normalize_string_param(value: Optional[str]) -> Optional[str]:
+    """
+    规范化字符串参数：将空字符串视为 None
+
+    Args:
+        value: 原始参数值
+
+    Returns:
+        规范化后的值（空字符串转为 None）
+    """
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
+
+
+def _validate_page_params(page_num: int, page_size: int) -> tuple[int, int]:
+    """
+    校验分页参数
+
+    Args:
+        page_num: 页码
+        page_size: 每页数量
+
+    Returns:
+        校验后的 (page_num, page_size)
+
+    Raises:
+        ValueError: 参数无效
+    """
+    if page_num < 1:
+        raise ValueError(f"page_num 必须大于 0，当前值: {page_num}")
+    if page_size < 1:
+        raise ValueError(f"page_size 必须大于 0，当前值: {page_size}")
+    if page_size > 100:
+        page_size = 100  # 自动修正为最大值
+    return page_num, page_size
+
+
 def _create_provider(
     project: Optional[str] = None, work_item_type: Optional[str] = None
 ) -> WorkItemProvider:
@@ -196,6 +289,10 @@ def _create_provider(
     Returns:
         WorkItemProvider 实例
     """
+    # 规范化参数：将空字符串视为 None
+    project = _normalize_string_param(project)
+    work_item_type = _normalize_string_param(work_item_type)
+
     if not project:
         # 使用默认项目（从环境变量读取）
         logger.debug("Using default project from FEISHU_PROJECT_KEY")
@@ -204,7 +301,7 @@ def _create_provider(
         return WorkItemProvider()
 
     if _is_project_key_format(project):
-        logger.debug("Treating '%s' as project_key", project)
+        logger.debug("Treating '%s' as project_key", _mask_project(project))
         if work_item_type:
             return WorkItemProvider(
                 project_key=project, work_item_type_name=work_item_type
@@ -212,7 +309,7 @@ def _create_provider(
         return WorkItemProvider(project_key=project)
     else:
         # 当作项目名称处理
-        logger.debug("Treating '%s' as project_name", project)
+        logger.debug("Treating '%s' as project_name", _mask_project(project))
         if work_item_type:
             return WorkItemProvider(
                 project_name=project, work_item_type_name=work_item_type
@@ -428,6 +525,12 @@ async def get_tasks(
         )
     """
     try:
+        # 参数校验
+        try:
+            page_num, page_size = _validate_page_params(page_num, page_size)
+        except ValueError as e:
+            return _error_response("获取任务列表", str(e), "ERR_VALIDATION")
+
         logger.info(
             "Getting tasks: project=%s, work_item_type=%s, has_name_keyword=%s, status=%s, priority=%s, has_owner=%s, has_related_to=%s, page=%d/%d",
             _mask_project(project),
@@ -448,7 +551,7 @@ async def get_tasks(
             try:
                 related_to_id = await provider.resolve_related_to(related_to, project)
             except ValueError as e:
-                return str(e)
+                return _error_response("解析关联工作项", str(e), "ERR_VALIDATION")
 
         # 解析逗号分隔的过滤条件
         status_list = [s.strip() for s in status.split(",")] if status else None
@@ -461,7 +564,7 @@ async def get_tasks(
             owner=owner,
             related_to=related_to_id,
             page_num=page_num,
-            page_size=min(page_size, 100),
+            page_size=page_size,
         )
 
         # 确保 result 是字典类型

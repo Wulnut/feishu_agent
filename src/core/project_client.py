@@ -9,6 +9,8 @@ FilePath: /feishu_agent/src/core/project_client.py
 import logging
 from typing import Optional
 
+import threading
+
 import httpx
 from tenacity import (
     before_sleep_log,
@@ -24,6 +26,7 @@ from src.core.config import settings
 logger = logging.getLogger(__name__)
 
 _project_client = None
+_project_client_lock = threading.Lock()  # 线程安全锁
 
 # 定义可重试的异常类型
 RETRYABLE_EXCEPTIONS = (
@@ -48,6 +51,12 @@ class RetryableHTTPError(Exception):
         super().__init__(f"HTTP {response.status_code}: {response.text[:200]}")
 
 
+class TokenError(Exception):
+    """Token 获取失败错误（可重试）"""
+
+    pass
+
+
 class ProjectAuth(httpx.Auth):
     """
     Custom Auth for Feishu Project API.
@@ -56,8 +65,11 @@ class ProjectAuth(httpx.Auth):
 
     async def async_auth_flow(self, request: httpx.Request):
         token = await auth_manager.get_plugin_token()
-        if token:
-            request.headers["X-PLUGIN-TOKEN"] = token
+        if not token:
+            # 抛出异常以触发重试
+            raise TokenError("Failed to retrieve plugin token")
+
+        request.headers["X-PLUGIN-TOKEN"] = token
 
         user_key = settings.FEISHU_PROJECT_USER_KEY
         if user_key:
@@ -72,7 +84,7 @@ class ProjectClient:
 
     特性:
     - 自动注入认证头 (X-PLUGIN-TOKEN, X-USER-KEY)
-    - 自动重试机制 (网络错误、超时、5xx 错误)
+    - 自动重试机制 (网络错误、超时、5xx 错误、认证失败)
     - 指数退避策略
     """
 
@@ -100,7 +112,9 @@ class ProjectClient:
             wait=wait_exponential(
                 multiplier=1, min=self.RETRY_MIN_WAIT, max=self.RETRY_MAX_WAIT
             ),
-            retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS + (RetryableHTTPError,)),
+            retry=retry_if_exception_type(
+                RETRYABLE_EXCEPTIONS + (RetryableHTTPError, TokenError)
+            ),
             before_sleep=before_sleep_log(logger, logging.WARNING),
             reraise=True,
         )
@@ -198,11 +212,31 @@ class ProjectClient:
 
 
 def get_project_client() -> ProjectClient:
-    """获取全局单例客户端"""
+    """
+    获取全局单例客户端（线程安全）
+
+    使用双重检查锁定模式，防止多线程/多协程并发时重复实例化。
+
+    Returns:
+        ProjectClient: 项目 API 客户端实例
+    """
     global _project_client
-    if not _project_client:
+
+    # 快速路径：已初始化则直接返回
+    if _project_client is not None:
+        logger.debug("Reusing existing ProjectClient singleton instance")
+        return _project_client
+
+    # 慢路径：使用锁保护初始化
+    with _project_client_lock:
+        # 双重检查：防止等待锁期间其他线程已完成初始化
+        if _project_client is not None:
+            logger.debug(
+                "Reusing existing ProjectClient singleton instance (after lock)"
+            )
+            return _project_client
+
         logger.debug("Creating new ProjectClient singleton instance")
         _project_client = ProjectClient()
-    else:
-        logger.debug("Reusing existing ProjectClient singleton instance")
+
     return _project_client
