@@ -263,6 +263,42 @@ class TestGetOptionValue:
         assert "未找到" in str(exc_info.value)
 
 
+    @pytest.mark.asyncio
+    async def test_get_option_value_nested(self, manager, mock_field_api):
+        """测试嵌套选项值解析 (Tree Select)"""
+        mock_field_api.get_all_fields.return_value = [
+            {
+                "field_name": "模块",
+                "field_key": "module",
+                "options": [
+                    {
+                        "label": "Parent",
+                        "value": "p_1",
+                        "children": [
+                            {
+                                "label": "Child",
+                                "value": "c_1",
+                                "children": [{"label": "Grandchild", "value": "g_1"}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+
+        # 1. 查找父选项
+        val_p = await manager.get_option_value("p_key", "t_key", "module", "Parent")
+        assert val_p == "p_1"
+
+        # 2. 查找子选项
+        val_c = await manager.get_option_value("p_key", "t_key", "module", "Child")
+        assert val_c == "c_1"
+
+        # 3. 查找孙选项
+        val_g = await manager.get_option_value("p_key", "t_key", "module", "Grandchild")
+        assert val_g == "g_1"
+
+
 class TestGetUserKey:
     """测试 get_user_key 方法"""
 

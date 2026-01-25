@@ -210,7 +210,7 @@ class MetadataManager:
                 if isinstance(projects, list):
                     # 尝试做一下兼容转换，假设 List 元素包含 Key
                     temp_map = {}
-                    for p in projects:
+                    for p in projects:  # type: ignore  # type: ignore
                         if isinstance(p, dict) and "project_key" in p:
                             temp_map[p["project_key"]] = p
                     projects = temp_map
@@ -423,6 +423,50 @@ class MetadataManager:
 
     # ========== L3: Field ==========
 
+    def _flatten_options(
+        self,
+        options: List[Dict[str, Any]],
+        target_map: Dict[str, str],
+        depth: int = 0,
+        max_depth: int = 20,
+    ) -> None:
+        """
+        递归展平选项树（支持 tree_select）
+
+        Args:
+            options: 选项列表（可能包含 children）
+            target_map: 目标映射 {label: value}
+            depth: 当前递归深度
+            max_depth: 最大递归深度，防止栈溢出
+        """
+        if depth > max_depth:
+            logger.warning(f"Recursion depth limit reached ({max_depth}) in _flatten_options")
+            return
+
+        for opt in options:
+            if not isinstance(opt, dict):
+                logger.warning(f"Invalid option format: {opt} (expected dict)")
+                continue
+
+            label = opt.get("label")
+            value = opt.get("value")
+
+            # 存储当前节点
+            if label and value:
+                # 检查冲突
+                if label in target_map and target_map[label] != value:
+                    logger.warning(
+                        f"Option label collision detected: '{label}' "
+                        f"(existing: {target_map[label]}, new: {value}). "
+                        "The previous value will be overwritten."
+                    )
+                target_map[label] = value
+
+            # 递归处理子节点
+            children = opt.get("children", [])
+            if children:
+                self._flatten_options(children, target_map, depth + 1, max_depth)
+
     async def _ensure_field_cache(self, project_key: str, type_key: str) -> None:
         """
         确保字段和选项缓存已加载
@@ -502,11 +546,7 @@ class MetadataManager:
                 options = f.get("options", [])
                 if options and f_key:
                     temp_option_map[f_key] = {}
-                    for opt in options:
-                        label = opt.get("label")
-                        value = opt.get("value")
-                        if label and value:
-                            temp_option_map[f_key][label] = value
+                    self._flatten_options(options, temp_option_map[f_key])
 
                 # 解析角色缓存: 从 current_status_operator_role 字段的 options 中提取
                 # options 格式: [{"label": "经办人", "value": "role_xxx_role_a06e00"}, ...]
