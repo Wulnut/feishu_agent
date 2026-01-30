@@ -215,3 +215,104 @@ class FieldAPI:
         relations = data.get("data", [])
         logger.info("Retrieved %d work item relations", len(relations))
         return relations
+
+    async def create_work_item_relation(
+        self,
+        project_key: str,
+        name: str,
+        start_work_item_type_key: str,
+        end_work_item_type_key: str,
+        **kwargs,
+    ) -> Dict:
+        """
+        新增工作项关系
+
+        对应 Postman: 配置 > 工作项配置 > 工作项关系配置 > 新增工作项关系
+        API: POST /open_api/work_item/relation/create
+
+        Args:
+            project_key: 项目空间 Key
+            name: 关系名称
+            start_work_item_type_key: 起始工作项类型 Key
+            end_work_item_type_key: 结束工作项类型 Key
+            **kwargs: 其他可选参数
+
+        Returns:
+            创建结果
+
+        Raises:
+            Exception: API 调用失败时抛出异常
+        """
+        url = "/open_api/work_item/relation/create"
+        payload = {
+            "project_key": project_key,
+            "name": name,
+            "start_work_item_type_key": start_work_item_type_key,
+            "end_work_item_type_key": end_work_item_type_key,
+            **kwargs,
+        }
+
+        logger.info(
+            "Creating work item relation: project_key=%s, name=%s, start=%s, end=%s",
+            project_key,
+            name,
+            start_work_item_type_key,
+            end_work_item_type_key,
+        )
+
+        resp = await self.client.post(url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("err_code") != 0:
+            err_msg = data.get("err_msg", "Unknown error")
+            logger.error(
+                "新增工作项关系失败: err_code=%s, err_msg=%s",
+                data.get("err_code"),
+                err_msg,
+            )
+            raise Exception(f"新增工作项关系失败: {err_msg}")
+
+        result = data.get("data", {})
+        logger.info("Work item relation created successfully")
+        return result
+
+    async def update_work_item_relation(self, relation_key: str, **kwargs) -> Dict:
+        """
+        更新工作项关系
+
+        对应 Postman: 配置 > 工作项配置 > 工作项关系配置 > 更新工作项关系
+        API: POST /open_api/work_item/relation/update
+
+        Args:
+            relation_key: 关系 Key
+            **kwargs: 更新的属性 (name, start_work_item_type_key, etc.)
+
+        Returns:
+            更新结果
+
+        Raises:
+            Exception: API 调用失败时抛出异常
+        """
+        url = "/open_api/work_item/relation/update"
+        payload = {"relation_key": relation_key, **kwargs}
+
+        logger.info("Updating work item relation: relation_key=%s", relation_key)
+        logger.debug("Update kwargs: %s", kwargs)
+
+        resp = await self.client.post(url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("err_code") != 0:
+            err_msg = data.get("err_msg", "Unknown error")
+            logger.error(
+                "更新工作项关系失败: err_code=%s, err_msg=%s",
+                data.get("err_code"),
+                err_msg,
+            )
+            raise Exception(f"更新工作项关系失败: {err_msg}")
+
+        result = data.get("data", {})
+        logger.info("Work item relation updated successfully")
+        return result

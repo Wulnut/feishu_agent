@@ -16,7 +16,9 @@ from tests.integration.conftest import TEST_PROJECT_KEY, skip_without_credential
 @skip_without_credentials
 async def test_api_response():
     """测试API响应格式"""
-    provider = WorkItemProvider(project_key=TEST_PROJECT_KEY, work_item_type_name="Issue管理")
+    provider = WorkItemProvider(
+        project_key=TEST_PROJECT_KEY, work_item_type_name="问题管理"
+    )
     client = get_project_client()
 
     print("=== 测试API响应格式 ===")

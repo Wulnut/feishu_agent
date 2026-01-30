@@ -1,9 +1,33 @@
 import logging
+import re
 from typing import Dict, List, Optional
 
 from src.core.project_client import get_project_client
 
 logger = logging.getLogger(__name__)
+
+# 安全校验：project_key 和 type_key 的合法字符白名单
+# 仅允许字母、数字、下划线和连字符
+_SAFE_KEY_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def _validate_key(key: str, key_name: str) -> None:
+    """
+    校验 key 是否符合安全规范（防止路径遍历攻击）
+
+    Args:
+        key: 待校验的 key 值
+        key_name: key 的名称（用于错误提示）
+
+    Raises:
+        ValueError: 当 key 包含非法字符时
+    """
+    if not key:
+        raise ValueError(f"{key_name} 不能为空")
+    if not _SAFE_KEY_PATTERN.match(key):
+        raise ValueError(
+            f"{key_name} 包含非法字符，仅允许字母、数字、下划线和连字符: {key[:20]}..."
+        )
 
 
 def _mask_sensitive(value: str, visible_chars: int = 4) -> str:
@@ -36,6 +60,12 @@ class WorkItemAPI:
     def __init__(self):
         self.client = get_project_client()
 
+    def _validate_keys(self, project_key: str, work_item_type_key: str = None) -> None:
+        """校验所有 key 参数的安全性"""
+        _validate_key(project_key, "project_key")
+        if work_item_type_key:
+            _validate_key(work_item_type_key, "work_item_type_key")
+
     async def create(
         self,
         project_key: str,
@@ -45,6 +75,8 @@ class WorkItemAPI:
         template_id: Optional[int] = None,
     ) -> int:
         """创建工作项"""
+        # 安全校验
+        self._validate_keys(project_key, work_item_type_key)
         # 日志脱敏：不记录完整的 project_key 和任务名称
         logger.info(
             "Creating work item: project_key=%s, type_key=%s, name_len=%d",
@@ -89,6 +121,7 @@ class WorkItemAPI:
         expand: Optional[Dict] = None,
     ) -> List[Dict]:
         """批量获取工作项详情"""
+        self._validate_keys(project_key, work_item_type_key)
         logger.debug(
             "Querying work items: project_key=%s, type_key=%s, ids_count=%d",
             _mask_project_key(project_key),
@@ -122,6 +155,7 @@ class WorkItemAPI:
         update_fields: List[Dict],
     ) -> None:
         """更新工作项"""
+        self._validate_keys(project_key, work_item_type_key)
         logger.info(
             "Updating work item: project_key=%s, type_key=%s, id=%s",
             _mask_project_key(project_key),
@@ -151,6 +185,7 @@ class WorkItemAPI:
         self, project_key: str, work_item_type_key: str, work_item_id: int
     ) -> None:
         """删除工作项"""
+        self._validate_keys(project_key, work_item_type_key)
         logger.warning(
             "Deleting work item: project_key=%s, type_key=%s, id=%s",
             _mask_project_key(project_key),
@@ -183,6 +218,10 @@ class WorkItemAPI:
         **kwargs,
     ) -> Dict:
         """基础筛选"""
+        # 安全校验
+        _validate_key(project_key, "project_key")
+        for type_key in work_item_type_keys:
+            _validate_key(type_key, "work_item_type_key")
         logger.debug(
             "Filtering work items: project_key=%s, type_keys=%s, page=%d/%d",
             _mask_project_key(project_key),
@@ -242,6 +281,7 @@ class WorkItemAPI:
         fields: Optional[List[str]] = None,
     ) -> Dict:
         """复杂条件搜索"""
+        self._validate_keys(project_key, work_item_type_key)
         logger.debug(
             "Searching work items with params: project_key=%s, type_key=%s, page=%d/%d",
             _mask_project_key(project_key),
@@ -313,6 +353,7 @@ class WorkItemAPI:
             NotImplementedError: 当传入多个字段时。
             RuntimeError: 当 API 返回业务错误时。
         """
+        self._validate_keys(project_key, work_item_type_key)
         url = "/open_api/work_item/batch_update"
 
         # API 限制：单次仅支持一个字段
@@ -380,6 +421,7 @@ class WorkItemAPI:
         Raises:
             Exception: API 调用失败时抛出异常
         """
+        self._validate_keys(project_key, work_item_type_key)
         url = f"/open_api/{project_key}/work_item/{work_item_type_key}/meta"
 
         logger.debug(
@@ -403,3 +445,242 @@ class WorkItemAPI:
         meta = data.get("data", {})
         logger.debug("Retrieved create meta successfully")
         return meta
+
+    async def search_by_relation(
+        self,
+        project_key: str,
+        work_item_type_key: str,
+        work_item_id: int,
+        relation_key: Optional[str] = None,
+        page_num: int = 1,
+        page_size: int = 20,
+    ) -> Dict:
+        """
+        关联工作项搜索
+
+        对应 Postman: 工作项 > 工作项列表 > 关联工作项搜索
+        API: POST /open_api/:project_key/work_item/:work_item_type_key/:work_item_id/search_by_relation
+
+        Args:
+            project_key: 项目空间 Key
+            work_item_type_key: 工作项类型 Key
+            work_item_id: 工作项 ID
+            relation_key: 关联关系 Key (可选)
+            page_num: 页码
+            page_size: 每页数量
+
+        Returns:
+            搜索结果，包含关联的工作项列表
+
+        Raises:
+            Exception: API 调用失败时抛出异常
+        """
+        self._validate_keys(project_key, work_item_type_key)
+        url = f"/open_api/{project_key}/work_item/{work_item_type_key}/{work_item_id}/search_by_relation"
+
+        payload = {
+            "page_num": page_num,
+            "page_size": page_size,
+        }
+        if relation_key:
+            payload["relation_key"] = relation_key
+
+        logger.debug(
+            "Searching by relation: project=%s, type=%s, id=%s, relation=%s",
+            _mask_project_key(project_key),
+            work_item_type_key,
+            work_item_id,
+            relation_key,
+        )
+
+        resp = await self.client.post(url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("err_code") != 0:
+            err_msg = data.get("err_msg", "Unknown error")
+            logger.error(
+                "关联工作项搜索失败: err_code=%s, err_msg=%s",
+                data.get("err_code"),
+                err_msg,
+            )
+            raise Exception(f"关联工作项搜索失败: {err_msg}")
+
+        result = data.get("data", {})
+        count = len(result.get("work_items", []))
+        logger.info("Search by relation successful: found %d items", count)
+        return result
+
+    async def get_operate_history(
+        self,
+        project_key: str,
+        work_item_type_key: str,
+        work_item_id: int,
+        page_num: int = 1,
+        page_size: int = 20,
+    ) -> Dict:
+        """
+        获取工作项操作记录
+
+        对应 Postman: 工作项 > 工作项列表 > 获取工作项操作记录
+        API: GET /open_api/:project_key/work_item/:work_item_type_key/:work_item_id/operate-history
+
+        Args:
+            project_key: 项目空间 Key
+            work_item_type_key: 工作项类型 Key
+            work_item_id: 工作项 ID
+            page_num: 页码
+            page_size: 每页数量
+
+        Returns:
+            操作记录列表
+
+        Raises:
+            Exception: API 调用失败时抛出异常
+        """
+        self._validate_keys(project_key, work_item_type_key)
+        url = f"/open_api/{project_key}/work_item/{work_item_type_key}/{work_item_id}/operate-history"
+
+        # GET 请求参数需要放在 params 中
+        params = {
+            "page_num": page_num,
+            "page_size": page_size,
+        }
+
+        logger.debug(
+            "Getting operate history: project=%s, type=%s, id=%s",
+            _mask_project_key(project_key),
+            work_item_type_key,
+            work_item_id,
+        )
+
+        resp = await self.client.get(url, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("err_code") != 0:
+            err_msg = data.get("err_msg", "Unknown error")
+            logger.error(
+                "获取工作项操作记录失败: err_code=%s, err_msg=%s",
+                data.get("err_code"),
+                err_msg,
+            )
+            raise Exception(f"获取工作项操作记录失败: {err_msg}")
+
+        result = data.get("data", [])
+        logger.info("Retrieved %d operate history records", len(result))
+        return result
+
+    async def query_man_hour(
+        self,
+        project_key: str,
+        work_item_type_key: str,
+        work_item_ids: List[int],
+    ) -> Dict:
+        """
+        查询工时
+
+        对应 Postman: 工作项 > 工作项列表 > 查询工时
+        API: POST /open_api/work_item/man_hour/query
+
+        Args:
+            project_key: 项目空间 Key
+            work_item_type_key: 工作项类型 Key
+            work_item_ids: 工作项 ID 列表
+
+        Returns:
+            工时信息列表
+
+        Raises:
+            Exception: API 调用失败时抛出异常
+        """
+        self._validate_keys(project_key, work_item_type_key)
+        url = "/open_api/work_item/man_hour/query"
+        payload = {
+            "project_key": project_key,
+            "work_item_type_key": work_item_type_key,
+            "work_item_ids": work_item_ids,
+        }
+
+        logger.debug(
+            "Querying man hours: project=%s, type=%s, count=%d",
+            _mask_project_key(project_key),
+            work_item_type_key,
+            len(work_item_ids),
+        )
+
+        resp = await self.client.post(url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("err_code") != 0:
+            err_msg = data.get("err_msg", "Unknown error")
+            logger.error(
+                "查询工时失败: err_code=%s, err_msg=%s",
+                data.get("err_code"),
+                err_msg,
+            )
+            raise Exception(f"查询工时失败: {err_msg}")
+
+        result = data.get("data", {})
+        logger.info("Man hours queried successfully")
+        return result
+
+    async def update_actual_time(
+        self,
+        project_key: str,
+        work_item_type_key: str,
+        work_item_id: int,
+        actual_time: int,
+    ) -> Dict:
+        """
+        更新实际工时
+
+        对应 Postman: 工作项 > 工作项列表 > 更新实际工时
+        API: POST /open_api/work_item/actual_time/update
+
+        Args:
+            project_key: 项目空间 Key
+            work_item_type_key: 工作项类型 Key
+            work_item_id: 工作项 ID
+            actual_time: 实际工时 (分钟)
+
+        Returns:
+            更新结果
+
+        Raises:
+            Exception: API 调用失败时抛出异常
+        """
+        self._validate_keys(project_key, work_item_type_key)
+        url = "/open_api/work_item/actual_time/update"
+        payload = {
+            "project_key": project_key,
+            "work_item_type_key": work_item_type_key,
+            "work_item_id": work_item_id,
+            "actual_time": actual_time,
+        }
+
+        logger.info(
+            "Updating actual time: project=%s, type=%s, id=%s, time=%d",
+            _mask_project_key(project_key),
+            work_item_type_key,
+            work_item_id,
+            actual_time,
+        )
+
+        resp = await self.client.post(url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("err_code") != 0:
+            err_msg = data.get("err_msg", "Unknown error")
+            logger.error(
+                "更新实际工时失败: err_code=%s, err_msg=%s",
+                data.get("err_code"),
+                err_msg,
+            )
+            raise Exception(f"更新实际工时失败: {err_msg}")
+
+        result = data.get("data", {})
+        logger.info("Actual time updated successfully")
+        return result

@@ -186,3 +186,144 @@ class MetadataAPI:
         templates = data.get("data", [])
         logger.info("Retrieved %d workflow templates", len(templates))
         return templates
+
+    async def update_work_item_type_config(
+        self,
+        project_key: str,
+        work_item_type_key: str,
+        config: Dict,
+    ) -> Dict:
+        """
+        更新工作项基础信息配置
+
+        对应 Postman: 配置 > 工作项配置 > 更新工作项基础信息配置
+        API: PUT /open_api/:project_key/work_item/type/:work_item_type_key
+
+        Args:
+            project_key: 项目空间 Key
+            work_item_type_key: 工作项类型 Key
+            config: 配置信息字典，包含 description, is_disabled, is_pinned, enable_schedule, etc.
+
+        Returns:
+            更新后的配置信息
+
+        Raises:
+            Exception: API 调用失败时抛出异常
+        """
+        url = f"/open_api/{project_key}/work_item/type/{work_item_type_key}"
+
+        logger.info(
+            "Updating work item type config: project_key=%s, type_key=%s",
+            project_key,
+            work_item_type_key,
+        )
+
+        resp = await self.client.put(url, json=config)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("err_code") != 0:
+            err_msg = data.get("err_msg", "Unknown error")
+            logger.error(
+                "更新工作项类型配置失败: err_code=%s, err_msg=%s",
+                data.get("err_code"),
+                err_msg,
+            )
+            raise Exception(f"更新工作项类型配置失败: {err_msg}")
+
+        result = data.get("data", {})
+        logger.info("Work item type config updated successfully")
+        return result
+
+    async def get_workflows(
+        self, project_key: str, work_item_type_key: str
+    ) -> List[Dict]:
+        """
+        获取流程列表
+
+        对应 Postman: 配置 > 流程配置 > 获取流程列表
+        API: GET /open_api/:project_key/workflow/:work_item_type_key
+
+        Args:
+            project_key: 项目空间 Key
+            work_item_type_key: 工作项类型 Key
+
+        Returns:
+            流程列表，每项包含 {uuid, name, ...}
+
+        Raises:
+            Exception: API 调用失败时抛出异常
+        """
+        url = f"/open_api/{project_key}/workflow/{work_item_type_key}"
+
+        logger.debug(
+            "Getting workflows: project_key=%s, type_key=%s",
+            project_key,
+            work_item_type_key,
+        )
+
+        resp = await self.client.get(url)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("err_code") != 0:
+            err_msg = data.get("err_msg", "Unknown error")
+            logger.error(
+                "获取流程列表失败: err_code=%s, err_msg=%s",
+                data.get("err_code"),
+                err_msg,
+            )
+            raise Exception(f"获取流程列表失败: {err_msg}")
+
+        workflows = data.get("data", [])
+        logger.info("Retrieved %d workflows", len(workflows))
+        return workflows
+
+    async def get_workflow_detail(
+        self,
+        project_key: str,
+        work_item_type_key: str,
+        workflow_id: int,
+    ) -> Dict:
+        """
+        获取流程详情
+
+        对应 Postman: 配置 > 流程配置 > 获取流程详情
+        API: GET /open_api/:project_key/workflow/:work_item_type_key/:workflow_id
+
+        Args:
+            project_key: 项目空间 Key
+            work_item_type_key: 工作项类型 Key
+            workflow_id: 流程 ID
+
+        Returns:
+            流程详情
+
+        Raises:
+            Exception: API 调用失败时抛出异常
+        """
+        url = f"/open_api/{project_key}/workflow/{work_item_type_key}/{workflow_id}"
+
+        logger.debug(
+            "Getting workflow detail: project=%s, type=%s, id=%s",
+            project_key,
+            work_item_type_key,
+            workflow_id,
+        )
+
+        resp = await self.client.get(url)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("err_code") != 0:
+            err_msg = data.get("err_msg", "Unknown error")
+            logger.error(
+                "获取流程详情失败: err_code=%s, err_msg=%s",
+                data.get("err_code"),
+                err_msg,
+            )
+            raise Exception(f"获取流程详情失败: {err_msg}")
+
+        detail = data.get("data", {})
+        logger.info("Retrieved workflow detail successfully")
+        return detail

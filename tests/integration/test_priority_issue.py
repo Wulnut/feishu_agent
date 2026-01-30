@@ -6,7 +6,7 @@
 import logging
 import pytest
 
-from src.core.config import settings
+
 from src.providers.lark_project.work_item_provider import WorkItemProvider
 from tests.integration.conftest import TEST_PROJECT_KEY, skip_without_credentials
 
@@ -22,7 +22,9 @@ async def test_priority_extraction():
     print("=== 测试优先级字段提取 ===")
 
     # 创建provider
-    provider = WorkItemProvider(project_key=TEST_PROJECT_KEY, work_item_type_name="Issue管理")
+    provider = WorkItemProvider(
+        project_key=TEST_PROJECT_KEY, work_item_type_name="问题管理"
+    )
 
     print("\n1. 测试优先级为P0的工作项查询...")
     try:
@@ -101,7 +103,9 @@ async def test_search_params_structure():
     """测试search_params API调用结构"""
     print("\n=== 测试search_params API结构 ===")
 
-    provider = WorkItemProvider(project_key=TEST_PROJECT_KEY, work_item_type_name="Issue管理")
+    provider = WorkItemProvider(
+        project_key=TEST_PROJECT_KEY, work_item_type_name="问题管理"
+    )
 
     # 获取项目和类型key
     project_key = await provider._get_project_key()

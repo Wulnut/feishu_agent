@@ -151,13 +151,34 @@ class WorkItemProvider(Provider):
             logger.debug("Field '%s' not found: %s", field_name, e)
             return False
 
+    def _parse_raw_field_value(self, value: Any) -> Optional[str]:
+        """
+        解析原始字段值为可读字符串（DRY 辅助方法）
+
+        Args:
+            value: 原始字段值，可以是 dict、list 或其他类型
+
+        Returns:
+            解析后的字符串值，如果无法解析则返回 None
+        """
+        if value is None:
+            return None
+        # 选项类型字段: {label: "...", value: "..."}
+        if isinstance(value, dict):
+            return value.get("label") or value.get("value")
+        # 用户类型字段: [{name: "...", name_cn: "..."}]
+        if isinstance(value, list) and value and isinstance(value[0], dict):
+            return value[0].get("name") or value[0].get("name_cn")
+        # 其他类型: 转为字符串
+        return str(value) if value else None
+
     def _extract_field_value(self, item: dict, field_key: str) -> Optional[str]:
         """
-        从工作项中提取字段值（辅助方法）
+        从工作项中提取字段值
 
         支持两种数据结构：
-        1. field_value_pairs: 旧版结构，字段以键值对列表形式存在
-        2. fields: 新版结构，字段以对象列表形式存在
+        1. fields: 新版结构，字段以对象列表形式存在
+        2. field_value_pairs: 旧版结构，字段以键值对列表形式存在
 
         Args:
             item: 工作项字典
@@ -166,76 +187,29 @@ class WorkItemProvider(Provider):
         Returns:
             字段值（字符串），如果不存在则返回 None
         """
-        logger.debug(
-            "_extract_field_value: Looking for field_key='%s' in item id=%s",
-            field_key,
-            item.get("id"),
+        # 优先从 fields 数组查找
+        field = next(
+            (f for f in item.get("fields", []) if f.get("field_key") == field_key),
+            None,
         )
-
-        # 首先尝试从 fields 数组中查找
-        fields = item.get("fields", [])
-        logger.debug(
-            "_extract_field_value: fields count=%d, available field_keys=%s",
-            len(fields),
-            [f.get("field_key") for f in fields],
-        )
-        for field in fields:
-            if field.get("field_key") == field_key:
-                value = field.get("field_value")
-                logger.debug("_extract_field_value: Found field, value=%s", value)
-                # 处理选项类型字段
-                if isinstance(value, dict):
-                    result = value.get("label") or value.get("value")
-                    logger.debug(
-                        "_extract_field_value: Extracted from dict: %s", result
-                    )
-                    return result
-                # 处理用户类型字段
-                if isinstance(value, list) and value:
-                    first = value[0]
-                    if isinstance(first, dict):
-                        result = first.get("name") or first.get("name_cn")
-                        logger.debug(
-                            "_extract_field_value: Extracted from user list: %s", result
-                        )
-                        return result
-                result = str(value) if value else None
-                logger.debug("_extract_field_value: Extracted as string: %s", result)
-                return result
+        if field:
+            return self._parse_raw_field_value(field.get("field_value"))
 
         # 回退到 field_value_pairs
-        field_pairs = item.get("field_value_pairs", [])
-        logger.debug(
-            "_extract_field_value: field_value_pairs count=%d", len(field_pairs)
+        pair = next(
+            (
+                p
+                for p in item.get("field_value_pairs", [])
+                if p.get("field_key") == field_key
+            ),
+            None,
         )
-        for pair in field_pairs:
-            if pair.get("field_key") == field_key:
-                value = pair.get("field_value")
-                logger.debug("_extract_field_value: Found in pairs, value=%s", value)
-                # 处理选项类型字段
-                if isinstance(value, dict):
-                    result = value.get("label") or value.get("value")
-                    logger.debug(
-                        "_extract_field_value: Extracted from dict (pairs): %s", result
-                    )
-                    return result
-                # 处理用户类型字段
-                if isinstance(value, list) and value:
-                    first = value[0]
-                    if isinstance(first, dict):
-                        result = first.get("name") or first.get("name_cn")
-                        logger.debug(
-                            "_extract_field_value: Extracted from user list (pairs): %s",
-                            result,
-                        )
-                        return result
-                result = str(value) if value else None
-                logger.debug(
-                    "_extract_field_value: Extracted as string (pairs): %s", result
-                )
-                return result
+        if pair:
+            return self._parse_raw_field_value(pair.get("field_value"))
 
-        logger.debug("_extract_field_value: Field key '%s' not found", field_key)
+        logger.debug(
+            "Field key '%s' not found in item id=%s", field_key, item.get("id")
+        )
         return None
 
     async def simplify_work_item(
@@ -259,37 +233,9 @@ class WorkItemProvider(Provider):
             return field_name
 
         priority_key = get_field_key("priority")
-        priority_value = None
         priority_raw = self._extract_field_value(item, priority_key)
-        # 脱敏处理：只记录优先级的前几个字符，或者不记录具体的敏感值
-        if priority_raw:
-            priority_value = priority_raw[:20]  # 截断
-
-        logger.info(
-            "simplify_work_item: item id=%s, keys=%s, field_mapping=%s, priority_key=%s, priority_value=%s",
-            item.get("id"),
-            list(item.keys()),
-            field_mapping,
-            priority_key,
-            priority_value,
-        )
-
-        if "fields" in item:
-            fields = item.get("fields", [])
-            logger.info(
-                "simplify_work_item: fields count=%d, field_keys=%s",
-                len(fields),
-                [f.get("field_key") for f in fields],
-            )
-            for field in fields:
-                if field.get("field_key") == priority_key:
-                    logger.info("simplify_work_item: found priority field: %s", field)
-        elif "field_value_pairs" in item:
-            pairs = item.get("field_value_pairs", [])
-            logger.info("simplify_work_item: field_value_pairs count=%d", len(pairs))
-            for pair in pairs:
-                if pair.get("field_key") == priority_key:
-                    logger.info("simplify_work_item: found priority in pairs: %s", pair)
+        # 脱敏处理：截断优先级值
+        priority_value = priority_raw[:20] if priority_raw else None
 
         return {
             "id": item.get("id"),
@@ -361,7 +307,7 @@ class WorkItemProvider(Provider):
         支持三种输入方式：
         1. 整数: 直接返回
         2. 数字字符串: 转换为整数返回
-        3. 非数字字符串: 在多个工作项类型中搜索，返回匹配的 ID
+        3. 非数字字符串: 在多个工作项类型中并行搜索，返回匹配的 ID
 
         Args:
             related_to: 工作项 ID 或名称
@@ -386,8 +332,8 @@ class WorkItemProvider(Provider):
                 logger.info("resolve_related_to: 字符串转整数 ID: %s", result)
                 return result
 
-            # 非数字字符串: 按名称搜索
-            logger.info("resolve_related_to: 按名称搜索 '%s'", related_to)
+            # 非数字字符串: 按名称并行搜索
+            logger.info("resolve_related_to: 按名称并行搜索 '%s'", related_to)
 
             # 在常见工作项类型中搜索
             search_types = [
@@ -398,61 +344,9 @@ class WorkItemProvider(Provider):
                 "Epic",
                 "事务管理",
             ]
-            found_item = None
 
-            for search_type in search_types:
-                try:
-                    # 创建临时 Provider 搜索
-                    temp_provider = WorkItemProvider(
-                        project_name=self.project_name,
-                        project_key=self._project_key,
-                        work_item_type_name=search_type,
-                    )
-                    search_result = await temp_provider.get_tasks(
-                        name_keyword=related_to, page_num=1, page_size=10
-                    )
-
-                    items = search_result.get("items", [])
-                    if items:
-                        # 优先精确匹配
-                        for item in items:
-                            if item.get("name") == related_to:
-                                found_item = item
-                                logger.info(
-                                    "resolve_related_to: 精确匹配 '%s' (ID: %s, Type: %s)",
-                                    item.get("name"),
-                                    item.get("id"),
-                                    search_type,
-                                )
-                                break
-
-                        # 如果找到了精确匹配，直接返回（最优先）
-                        if found_item:
-                            break
-
-                        # 暂时不接受部分匹配，继续搜索其他类型
-                        # 直到所有类型都搜索完，如果还是没有精确匹配，再考虑部分匹配
-                        # (优化：这里可以先缓存部分匹配结果)
-                except Exception as e:
-                    logger.debug(
-                        "resolve_related_to: 在类型 '%s' 中搜索失败: %s",
-                        search_type,
-                        e,
-                    )
-                    continue
-
-            # 如果没有找到精确匹配，进行第二轮搜索（或者在第一轮中收集候选者）
-            # 为了简单起见，这里我们修改策略：只接受精确匹配，或者在没有精确匹配时，
-            # 重新遍历搜索部分匹配（性能稍差但逻辑更安全），或者在第一轮收集中改进。
-
-            # 改进策略：第一轮收集所有候选结果
-            candidates = []
-
-            # 重置 found_item
-            found_item = None
-
-            # 重新执行更严谨的搜索逻辑
-            for search_type in search_types:
+            async def search_single_type(search_type: str) -> Tuple[str, List[dict]]:
+                """搜索单个工作项类型，返回 (类型名, 结果列表)"""
                 try:
                     temp_provider = WorkItemProvider(
                         project_name=self.project_name,
@@ -462,29 +356,41 @@ class WorkItemProvider(Provider):
                     search_result = await temp_provider.get_tasks(
                         name_keyword=related_to, page_num=1, page_size=5
                     )
-                    items = search_result.get("items", [])
+                    return (search_type, search_result.get("items", []))
+                except Exception as e:
+                    logger.debug(
+                        "resolve_related_to: 在类型 '%s' 中搜索失败: %s",
+                        search_type,
+                        e,
+                    )
+                    return (search_type, [])
 
-                    for item in items:
-                        item_name = item.get("name")
-                        if item_name == related_to:
-                            # 发现精确匹配，直接返回
-                            logger.info(
-                                "resolve_related_to: 精确匹配 '%s' (ID: %s, Type: %s)",
-                                item_name,
-                                item.get("id"),
-                                search_type,
-                            )
-                            return item.get("id")
+            # 并行搜索所有类型
+            results = await asyncio.gather(
+                *(search_single_type(t) for t in search_types)
+            )
 
-                        # 收集部分匹配作为候选
-                        candidates.append((item, search_type))
+            # 处理结果：优先精确匹配，其次部分匹配
+            candidates: List[Tuple[dict, str]] = []
 
-                except Exception:
-                    continue
+            for search_type, items in results:
+                for item in items:
+                    item_name = item.get("name")
+                    if item_name == related_to:
+                        # 发现精确匹配，直接返回
+                        logger.info(
+                            "resolve_related_to: 精确匹配 '%s' (ID: %s, Type: %s)",
+                            item_name,
+                            item.get("id"),
+                            search_type,
+                        )
+                        return item.get("id")
+
+                    # 收集部分匹配作为候选
+                    candidates.append((item, search_type))
 
             # 如果没有精确匹配，检查候选者
             if candidates:
-                # 取第一个候选者（或者可以添加更复杂的评分逻辑）
                 best_match, match_type = candidates[0]
                 logger.info(
                     "resolve_related_to: 部分匹配 '%s' (ID: %s, Type: %s)",
@@ -549,12 +455,20 @@ class WorkItemProvider(Provider):
         # 特殊处理：针对 multi_select 字段，如果值为空（None 或空字符串），返回空列表 []
         # 这允许通过 API 清空多选字段，同时也避免了对 "" 进行选项查询导致的报错
         try:
-            field_type = await self.meta.get_field_type(project_key, type_key, field_key)
-            if field_type == "multi_select" and (value is None or (isinstance(value, str) and not value.strip())):
-                logger.info("Empty value for multi_select field '%s', returning []", field_key)
+            field_type = await self.meta.get_field_type(
+                project_key, type_key, field_key
+            )
+            if field_type == "multi_select" and (
+                value is None or (isinstance(value, str) and not value.strip())
+            ):
+                logger.info(
+                    "Empty value for multi_select field '%s', returning []", field_key
+                )
                 return []
         except Exception as e:
-            logger.debug("Failed to get field type in _resolve_field_value_for_update: %s", e)
+            logger.debug(
+                "Failed to get field type in _resolve_field_value_for_update: %s", e
+            )
 
         # 处理列表 (多选)
         if isinstance(value, list):
@@ -568,12 +482,20 @@ class WorkItemProvider(Provider):
             return results
 
         # 处理带分隔符的字符串 (伪多选支持 "A / B", "A, B", "A; B")
-        if isinstance(value, str) and any(sep in value for sep in [" / ", ",", ";", "|"]):
+        if isinstance(value, str) and any(
+            sep in value for sep in [" / ", ",", ";", "|"]
+        ):
             # 策略：先尝试不拆分直接匹配（可能是一个带逗号的单选项标签）
             try:
                 # 尝试直接获取，不抛出异常
-                option_map = self.meta._option_cache.get(project_key, {}).get(type_key, {}).get(field_key, {})
-                if value in option_map or self.meta._fuzzy_match_option(value, option_map):
+                option_map = (
+                    self.meta._option_cache.get(project_key, {})
+                    .get(type_key, {})
+                    .get(field_key, {})
+                )
+                if value in option_map or self.meta._fuzzy_match_option(
+                    value, option_map
+                ):
                     # 匹配成功，说明是一个整体，跳过拆分逻辑
                     pass
                 else:
@@ -584,7 +506,9 @@ class WorkItemProvider(Provider):
                     else:
                         for sep in [",", ";", "|"]:
                             if sep in value:
-                                parts = [p.strip() for p in value.split(sep) if p.strip()]
+                                parts = [
+                                    p.strip() for p in value.split(sep) if p.strip()
+                                ]
                                 break
 
                     if len(parts) > 1:
@@ -767,7 +691,9 @@ class WorkItemProvider(Provider):
                     project_key, type_key, field_key, priority
                 )
 
-                logger.info("Updating priority to %s for issue %s...", option_val, issue_id)
+                logger.info(
+                    "Updating priority to %s for issue %s...", option_val, issue_id
+                )
                 await self.api.update(
                     project_key,
                     type_key,
@@ -775,7 +701,9 @@ class WorkItemProvider(Provider):
                     [{"field_key": field_key, "field_value": option_val}],
                 )
             except Exception as e:
-                logger.warning("Failed to update priority for issue %s: %s", issue_id, e)
+                logger.warning(
+                    "Failed to update priority for issue %s: %s", issue_id, e
+                )
 
         return int(issue_id)
 
@@ -818,7 +746,6 @@ class WorkItemProvider(Provider):
             # 并发搜索其他类型（分批次以防并发过高）
             found_item = None
             found_type_name = None
-            found_type_key = None
 
             # 将类型转换为列表以便分批
             type_items = list(other_types.items())
@@ -837,7 +764,7 @@ class WorkItemProvider(Provider):
                     if isinstance(res, list) and res:
                         found_item = res[0]
                         found_type_name = batch[idx][0]
-                        found_type_key = batch[idx][1]
+                        _ = batch[idx][1]  # type_key not used here
                         break
 
                 if found_item:
@@ -1429,44 +1356,98 @@ class WorkItemProvider(Provider):
 
                 f_key = await f_key_getter()
                 if f_key == "name":
-                    resolved_fields.append({"field_key": "name", "field_value": f_value, "field_name": f_name})
+                    resolved_fields.append(
+                        {
+                            "field_key": "name",
+                            "field_value": f_value,
+                            "field_name": f_name,
+                        }
+                    )
                     return
 
                 # 检查字段类型和空值过滤
-                field_type = await self.meta.get_field_type(project_key, type_key, f_key)
-                if f_value is None or (isinstance(f_value, str) and not f_value.strip()):
+                field_type = await self.meta.get_field_type(
+                    project_key, type_key, f_key
+                )
+                if f_value is None or (
+                    isinstance(f_value, str) and not f_value.strip()
+                ):
                     # 允许清空的字段类型列表（主要是文本类）
                     if field_type not in ["text", "textarea", "name"]:
-                        logger.info("Skipping empty value for non-text field '%s'", f_name)
+                        logger.info(
+                            "Skipping empty value for non-text field '%s'", f_name
+                        )
                         return
 
-                option_val = await self._resolve_field_value_for_update(project_key, type_key, f_key, f_value)
-                resolved_fields.append({"field_key": f_key, "field_value": option_val, "field_name": f_name})
+                option_val = await self._resolve_field_value_for_update(
+                    project_key, type_key, f_key, f_value
+                )
+                resolved_fields.append(
+                    {
+                        "field_key": f_key,
+                        "field_value": option_val,
+                        "field_name": f_name,
+                    }
+                )
             except Exception as e:
                 logger.warning("Failed to resolve field '%s': %s", f_name, e)
-                failed_results.append(UpdateResult(success=False, issue_id=issue_id, field_name=f_name, message=f"字段解析失败: {e}"))
+                failed_results.append(
+                    UpdateResult(
+                        success=False,
+                        issue_id=issue_id,
+                        field_name=f_name,
+                        message=f"字段解析失败: {e}",
+                    )
+                )
 
         if name is not None:
             await add_field("name", name, lambda: asyncio.sleep(0, "name") or "name")
 
         if description is not None:
-            await add_field("description", description, lambda: self.meta.get_field_key(project_key, type_key, "description"))
+            await add_field(
+                "description",
+                description,
+                lambda: self.meta.get_field_key(project_key, type_key, "description"),
+            )
 
         if priority is not None:
-            await add_field("priority", priority, lambda: self.meta.get_field_key(project_key, type_key, "priority"))
+            await add_field(
+                "priority",
+                priority,
+                lambda: self.meta.get_field_key(project_key, type_key, "priority"),
+            )
 
         if status is not None:
-            await add_field("status", status, lambda: self.meta.get_field_key(project_key, type_key, "status"))
+            await add_field(
+                "status",
+                status,
+                lambda: self.meta.get_field_key(project_key, type_key, "status"),
+            )
 
         if assignee is not None:
-            await add_field("assignee", assignee, lambda: asyncio.sleep(0, "owner") or "owner")
+            await add_field(
+                "assignee", assignee, lambda: asyncio.sleep(0, "owner") or "owner"
+            )
 
         if extra_fields:
             for f_name, f_value in extra_fields.items():
                 if not await self._field_exists(project_key, type_key, f_name):
-                    failed_results.append(UpdateResult(success=False, issue_id=issue_id, field_name=f_name, message=f"字段 '{f_name}' 不存在"))
+                    failed_results.append(
+                        UpdateResult(
+                            success=False,
+                            issue_id=issue_id,
+                            field_name=f_name,
+                            message=f"字段 '{f_name}' 不存在",
+                        )
+                    )
                     continue
-                await add_field(f_name, f_value, lambda name=f_name: self.meta.get_field_key(project_key, type_key, name))
+                await add_field(
+                    f_name,
+                    f_value,
+                    lambda name=f_name: self.meta.get_field_key(
+                        project_key, type_key, name
+                    ),
+                )
 
         return resolved_fields, failed_results
 
@@ -1491,7 +1472,7 @@ class WorkItemProvider(Provider):
                         project_key,
                         type_key,
                         issue_id,
-                        [{"field_key": field_key, "field_value": resolved_value}]
+                        [{"field_key": field_key, "field_value": resolved_value}],
                     )
                     await asyncio.sleep(0.1)
 
@@ -1504,18 +1485,25 @@ class WorkItemProvider(Provider):
 
             except Exception as e:
                 is_429 = False
-                if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429:
+                if (
+                    isinstance(e, httpx.HTTPStatusError)
+                    and e.response.status_code == 429
+                ):
                     is_429 = True
                 elif "429" in str(e) and "Too Many Requests" in str(e):
                     is_429 = True
 
                 if is_429 and attempt < max_retries:
                     delay = base_delay * (2**attempt) + random.uniform(0, 1)
-                    logger.warning("Rate limit (429) hit. Retrying in %.2f seconds...", delay)
+                    logger.warning(
+                        "Rate limit (429) hit. Retrying in %.2f seconds...", delay
+                    )
                     await asyncio.sleep(delay)
                     continue
 
-                logger.error("Failed to update issue %d field '%s': %s", issue_id, field_name, e)
+                logger.error(
+                    "Failed to update issue %d field '%s': %s", issue_id, field_name, e
+                )
 
                 error_detail = str(e)
                 # 增强的错误提取逻辑：直接从异常对象的 response 中解析
@@ -1539,7 +1527,9 @@ class WorkItemProvider(Provider):
                         if "is illegal" in error_detail:
                             error_detail += " (字段可能被流程锁定、只读或权限不足)"
                     except Exception as parse_err:
-                        logger.debug("Failed to parse API error response: %s", parse_err)
+                        logger.debug(
+                            "Failed to parse API error response: %s", parse_err
+                        )
                         # 如果解析失败，保留原始 str(e) 但去掉冗余的 URL 信息以保持整洁
                         if "for url" in error_detail:
                             error_detail = error_detail.split("for url")[0].strip()
@@ -1551,7 +1541,12 @@ class WorkItemProvider(Provider):
                     message=f"更新字段 '{field_name}' 失败: {error_detail}",
                 )
 
-        return UpdateResult(success=False, issue_id=issue_id, field_name=field_name, message="重试次数耗尽")
+        return UpdateResult(
+            success=False,
+            issue_id=issue_id,
+            field_name=field_name,
+            message="重试次数耗尽",
+        )
 
     async def batch_update_issues(
         self,
@@ -1574,8 +1569,15 @@ class WorkItemProvider(Provider):
         # 1. 预解析所有字段（仅解析一次）
         # 注意：这里解析失败的 issue_id 暂时用第一个，后续多 Issue 场景需要复制
         resolved_fields, base_failed_results = await self._resolve_update_fields(
-            project_key, type_key, issue_ids[0],
-            name, priority, description, status, assignee, extra_fields
+            project_key,
+            type_key,
+            issue_ids[0],
+            name,
+            priority,
+            description,
+            status,
+            assignee,
+            extra_fields,
         )
 
         all_results = []
@@ -1592,23 +1594,42 @@ class WorkItemProvider(Provider):
             issue_id = issue_ids[0]
             try:
                 logger.info("Optimistic batch update for issue %d", issue_id)
-                api_payload = [{"field_key": f["field_key"], "field_value": f["field_value"]} for f in resolved_fields]
+                api_payload = [
+                    {"field_key": f["field_key"], "field_value": f["field_value"]}
+                    for f in resolved_fields
+                ]
 
                 async with self._api_semaphore:
                     await self.api.update(project_key, type_key, issue_id, api_payload)
 
                 # 全部成功
-                all_results.extend([
-                    UpdateResult(success=True, issue_id=issue_id, field_name=f["field_name"], message="更新成功")
-                    for f in resolved_fields
-                ])
+                all_results.extend(
+                    [
+                        UpdateResult(
+                            success=True,
+                            issue_id=issue_id,
+                            field_name=f["field_name"],
+                            message="更新成功",
+                        )
+                        for f in resolved_fields
+                    ]
+                )
                 return all_results
             except Exception as e:
-                is_429 = "429" in str(e) or (isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429)
+                is_429 = "429" in str(e) or (
+                    isinstance(e, httpx.HTTPStatusError)
+                    and e.response.status_code == 429
+                )
                 if is_429:
-                    logger.warning("Optimistic update hit rate limit (429), falling back to individual updates.")
+                    logger.warning(
+                        "Optimistic update hit rate limit (429), falling back to individual updates."
+                    )
                 else:
-                    logger.warning("Optimistic update failed for issue %d: %s. Falling back to individual updates for fault tolerance.", issue_id, e)
+                    logger.warning(
+                        "Optimistic update failed for issue %d: %s. Falling back to individual updates for fault tolerance.",
+                        issue_id,
+                        e,
+                    )
                 # 降级执行：进入下方的逐字段更新逻辑
 
         # 3. 逐字段更新（降级或多 Issue 路径）
@@ -1617,8 +1638,12 @@ class WorkItemProvider(Provider):
             for field in resolved_fields:
                 tasks.append(
                     self._perform_single_field_update(
-                        project_key, type_key, issue_id,
-                        field["field_name"], field["field_key"], field["field_value"]
+                        project_key,
+                        type_key,
+                        issue_id,
+                        field["field_name"],
+                        field["field_key"],
+                        field["field_value"],
                     )
                 )
 
@@ -1835,7 +1860,7 @@ class WorkItemProvider(Provider):
 
         # 特殊处理：当只有 related_to 参数时，需要获取工作项进行客户端过滤
         # 因为关联字段不支持 API 级别的过滤
-        # 优化：增量加载，达到结果数量限制后停止，避免全量扫描
+        # ⚠️ 安全加固：限制扫描深度，防止 DoS 攻击或资源耗尽
         if (
             related_to
             and not name_keyword
@@ -1843,14 +1868,19 @@ class WorkItemProvider(Provider):
             and not priority
             and not owner
         ):
-            logger.info("Getting items for related_to filtering: %s", related_to)
+            logger.warning(
+                "⚠️ related_to filter without other conditions requires client-side scanning. "
+                "This is an expensive operation. Consider adding name_keyword, status, or priority "
+                "to narrow the search scope. Scanning for related_to=%s",
+                related_to,
+            )
 
-            # 配置限制：扫描足够的数据以确保找到所有关联项
-            # 注意：related_to 过滤只能在客户端进行，需要扫描较多数据
-            MAX_TOTAL_ITEMS = 2000  # 最多扫描 2000 条记录
-            MAX_PAGES = 40  # 最多 40 页
-            BATCH_SIZE = 50  # 每批 50 条，减少内存占用
-            CONCURRENT_PAGES = 5  # 每次并发请求的页数
+            # 配置限制：大幅降低扫描深度以防止资源耗尽
+            # 如果需要扫描更多数据，请配合 name_keyword 或 status 使用
+            MAX_TOTAL_ITEMS = 500  # 最多扫描 500 条记录（从 2000 降低）
+            MAX_PAGES = 10  # 最多 10 页（从 40 降低）
+            BATCH_SIZE = 50  # 每批 50 条
+            CONCURRENT_PAGES = 3  # 每次并发请求的页数（从 5 降低）
 
             found_items = []
             total_fetched = 0
@@ -1972,7 +2002,11 @@ class WorkItemProvider(Provider):
                 "total": len(found_items),
                 "page_num": 1,
                 "page_size": len(found_items),
-                "hint": f"Found {len(found_items)} items related to {related_to} (searched {total_fetched} items)",
+                "hint": (
+                    f"Found {len(found_items)} items related to {related_to} "
+                    f"(scanned {total_fetched} items, max {MAX_TOTAL_ITEMS}). "
+                    "To search more items, add name_keyword, status, or priority filters."
+                ),
             }
 
         # 如果提供了 name_keyword，优先使用 filter API（更高效）
@@ -2192,14 +2226,42 @@ class WorkItemProvider(Provider):
         if owner:
             try:
                 user_key = await self.meta.get_user_key(owner)
+
+                # 动态解析负责人字段 Key
+                # 尝试顺序: "owner" -> "当前负责人" -> "负责人" -> "经办人" -> "Assignee"
+                owner_field_key = "owner"  # 默认值
+                candidate_names = [
+                    "owner",
+                    "当前负责人",
+                    "负责人",
+                    "经办人",
+                    "Assignee",
+                ]
+
+                for candidate in candidate_names:
+                    try:
+                        key = await self.meta.get_field_key(
+                            project_key, type_key, candidate
+                        )
+                        if key:
+                            owner_field_key = key
+                            logger.debug(
+                                "Resolved owner field key to: %s ('%s')", key, candidate
+                            )
+                            break
+                    except Exception:
+                        continue
+
                 conditions.append(
                     {
-                        "field_key": "owner",
+                        "field_key": owner_field_key,
                         "operator": "IN",
                         "value": [user_key],
                     }
                 )
-                logger.info("Added owner filter: %s", owner)
+                logger.info(
+                    "Added owner filter: %s (field_key=%s)", owner, owner_field_key
+                )
             except Exception as e:
                 logger.warning(
                     "Failed to resolve owner '%s': %s, skipping owner filter", owner, e
