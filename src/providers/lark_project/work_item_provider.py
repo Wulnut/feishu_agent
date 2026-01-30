@@ -11,6 +11,11 @@ from src.providers.base import Provider
 from src.providers.lark_project.api.work_item import WorkItemAPI
 from src.providers.lark_project.api.user import UserAPI
 from src.providers.lark_project.managers import MetadataManager
+from src.providers.lark_project.field_resolver import (
+    FieldResolver,
+)
+from src.providers.lark_project.work_item_formatter import WorkItemFormatter
+from src.providers.lark_project.relation_resolver import RelationResolver
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +42,21 @@ class WorkItemProvider(Provider):
 
     # 类常量：缓存中"未找到"的标记值
     _NOT_FOUND_MARKER: str = "__NOT_FOUND__"
+
+    # 扫描配置常量（用于 related_to 客户端过滤）
+    _SCAN_MAX_TOTAL_ITEMS: int = 500  # 最多扫描的记录数
+    _SCAN_MAX_PAGES: int = 10  # 最多扫描的页数
+    _SCAN_BATCH_SIZE: int = 50  # 每批记录数
+    _SCAN_CONCURRENT_PAGES: int = 3  # 每次并发请求的页数
+
+    # 负责人字段的候选名称列表（按优先级排序）
+    _OWNER_FIELD_CANDIDATES: Tuple[str, ...] = (
+        "owner",
+        "当前负责人",
+        "负责人",
+        "经办人",
+        "Assignee",
+    )
 
     def __init__(
         self,
@@ -73,6 +93,13 @@ class WorkItemProvider(Provider):
 
         # 限制并发 API 请求数量，防止触发 429 频控 (15 QPS 限制)
         self._api_semaphore = asyncio.Semaphore(2)
+
+        # 初始化抽取的子模块（P0-P2 重构）
+        self.field_resolver = FieldResolver(self.meta)
+        self.formatter = WorkItemFormatter(
+            self.meta, self.field_resolver, self._work_item_cache
+        )
+        self.relation_resolver = RelationResolver(self.api, self.meta)
 
     async def _get_project_key(self) -> str:
         if not self._project_key:
@@ -150,6 +177,102 @@ class WorkItemProvider(Provider):
         except (ValueError, KeyError) as e:
             logger.debug("Field '%s' not found: %s", field_name, e)
             return False
+
+    def _is_item_related_to(self, item: Dict[str, Any], related_to: int) -> bool:
+        """
+        检查工作项是否与指定 ID 关联（DRY 辅助方法）
+
+        Args:
+            item: 工作项字典
+            related_to: 关联的工作项 ID
+
+        Returns:
+            True: 关联，False: 不关联
+        """
+        for field in item.get("fields", []):
+            field_value = field.get("field_value")
+            if not field_value:
+                continue
+            if isinstance(field_value, list):
+                if related_to in field_value:
+                    return True
+            elif field_value == related_to:
+                return True
+        return False
+
+    def _normalize_api_result(
+        self,
+        result: Union[List, Dict, Any],
+        page_num: int,
+        page_size: int,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+        """
+        标准化 API 返回结果（DRY 辅助方法）
+
+        处理 API 可能返回列表或字典的情况，统一转换为 (items, pagination) 元组。
+
+        Args:
+            result: API 原始返回结果
+            page_num: 请求的页码
+            page_size: 请求的每页数量
+
+        Returns:
+            (items, pagination) 元组
+        """
+        if isinstance(result, list):
+            items = result
+            pagination = {
+                "total": len(result),
+                "page_num": page_num,
+                "page_size": page_size,
+            }
+            logger.debug("API returned list format, converted to standard format")
+        elif isinstance(result, dict):
+            items = result.get("work_items", [])
+            pagination = result.get("pagination", {})
+            # 如果 pagination 不是字典，创建默认的
+            if not isinstance(pagination, dict):
+                pagination = {
+                    "total": result.get("total", len(items)),
+                    "page_num": page_num,
+                    "page_size": page_size,
+                }
+        else:
+            logger.warning(
+                "Unexpected result type: %s, value: %s", type(result), result
+            )
+            items = []
+            pagination = {
+                "total": 0,
+                "page_num": page_num,
+                "page_size": page_size,
+            }
+        return items, pagination
+
+    async def _resolve_owner_field_key(self, project_key: str, type_key: str) -> str:
+        """
+        动态解析负责人字段 Key（DRY 辅助方法）
+
+        尝试按优先级顺序匹配候选字段名称。
+
+        Args:
+            project_key: 项目 Key
+            type_key: 工作项类型 Key
+
+        Returns:
+            负责人字段 Key，默认为 "owner"
+        """
+        for candidate in self._OWNER_FIELD_CANDIDATES:
+            try:
+                key = await self.meta.get_field_key(project_key, type_key, candidate)
+                if key:
+                    logger.debug(
+                        "Resolved owner field key to: %s ('%s')", key, candidate
+                    )
+                    return key
+            except Exception:
+                continue
+        return "owner"  # 默认值
 
     def _parse_raw_field_value(self, value: Any) -> Optional[str]:
         """
@@ -1784,19 +1907,8 @@ class WorkItemProvider(Provider):
             page_size=page_size,
         )
 
-        # 标准化返回结果
-        # 处理 API 可能返回列表或字典的情况
-        if isinstance(result, list):
-            items = result
-            pagination = {
-                "total": len(result),
-                "page_num": page_num,
-                "page_size": page_size,
-            }
-            logger.debug("API returned list format, converted to standard format")
-        else:
-            items = result.get("work_items", [])
-            pagination = result.get("pagination", {})
+        # 使用辅助方法标准化返回结果
+        items, pagination = self._normalize_api_result(result, page_num, page_size)
 
         return {
             "items": items,
@@ -1875,32 +1987,30 @@ class WorkItemProvider(Provider):
                 related_to,
             )
 
-            # 配置限制：大幅降低扫描深度以防止资源耗尽
-            # 如果需要扫描更多数据，请配合 name_keyword 或 status 使用
-            MAX_TOTAL_ITEMS = 500  # 最多扫描 500 条记录（从 2000 降低）
-            MAX_PAGES = 10  # 最多 10 页（从 40 降低）
-            BATCH_SIZE = 50  # 每批 50 条
-            CONCURRENT_PAGES = 3  # 每次并发请求的页数（从 5 降低）
-
-            found_items = []
+            found_items: List[Dict[str, Any]] = []
             total_fetched = 0
             current_page = 1
 
-            while total_fetched < MAX_TOTAL_ITEMS and current_page <= MAX_PAGES:
+            while (
+                total_fetched < self._SCAN_MAX_TOTAL_ITEMS
+                and current_page <= self._SCAN_MAX_PAGES
+            ):
                 # 确定本次并发请求的页码范围
-                end_page = min(current_page + CONCURRENT_PAGES, MAX_PAGES + 1)
-                page_range = range(current_page, end_page)
+                end_page = min(
+                    current_page + self._SCAN_CONCURRENT_PAGES,
+                    self._SCAN_MAX_PAGES + 1,
+                )
 
-                tasks = []
-                for p in page_range:
-                    tasks.append(
-                        self.api.filter(
-                            project_key=project_key,
-                            work_item_type_keys=[type_key],
-                            page_num=p,
-                            page_size=BATCH_SIZE,
-                        )
+                # 使用列表推导式构建并发任务
+                tasks = [
+                    self.api.filter(
+                        project_key=project_key,
+                        work_item_type_keys=[type_key],
+                        page_num=p,
+                        page_size=self._SCAN_BATCH_SIZE,
                     )
+                    for p in range(current_page, end_page)
+                ]
 
                 logger.info(
                     "Fetching pages %d to %d concurrently...",
@@ -1917,20 +2027,23 @@ class WorkItemProvider(Provider):
                 has_error = False
 
                 for i, result in enumerate(results):
-                    page_num = current_page + i
+                    result_page_num = current_page + i
 
                     if isinstance(result, Exception):
-                        logger.error("Failed to fetch page %d: %s", page_num, result)
+                        logger.error(
+                            "Failed to fetch page %d: %s", result_page_num, result
+                        )
                         has_error = True
                         continue
 
-                    # 标准化返回结果
-                    if isinstance(result, list):
-                        items = result
-                    elif isinstance(result, dict):
-                        items = result.get("work_items", [])
-                    else:
-                        items = []
+                    # 标准化返回结果（简化版，不需要完整 pagination）
+                    items = (
+                        result
+                        if isinstance(result, list)
+                        else result.get("work_items", [])
+                        if isinstance(result, dict)
+                        else []
+                    )
 
                     if not items:
                         should_stop = True
@@ -1939,25 +2052,15 @@ class WorkItemProvider(Provider):
                     batch_items_count += len(items)
                     total_fetched += len(items)
 
-                    # 过滤关联工作项
-                    for item in items:
-                        is_related = False
-                        fields = item.get("fields", [])
-                        for field in fields:
-                            field_value = field.get("field_value")
-                            if field_value:
-                                if isinstance(field_value, list):
-                                    if related_to in field_value:
-                                        is_related = True
-                                        break
-                                elif field_value == related_to:
-                                    is_related = True
-                                    break
-                        if is_related:
-                            found_items.append(item)
+                    # 使用辅助方法过滤关联工作项
+                    found_items.extend(
+                        item
+                        for item in items
+                        if self._is_item_related_to(item, related_to)
+                    )
 
                     # 如果某一页的数据少于 BATCH_SIZE，说明已经是最后一页
-                    if len(items) < BATCH_SIZE:
+                    if len(items) < self._SCAN_BATCH_SIZE:
                         should_stop = True
 
                 logger.debug(
@@ -1972,14 +2075,13 @@ class WorkItemProvider(Provider):
                     break
 
                 # 如果出现错误但没有明确停止信号，也停止，防止数据不一致导致的问题
-                # 或者可以实现重试逻辑，这里选择安全停止
                 if has_error:
                     logger.warning(
                         "Stopping fetch due to errors in page retrieval to ensure data consistency"
                     )
                     break
 
-                current_page += CONCURRENT_PAGES
+                current_page += self._SCAN_CONCURRENT_PAGES
 
             logger.info(
                 "Fetched %d items, found %d items related to %s",
@@ -2004,7 +2106,7 @@ class WorkItemProvider(Provider):
                 "page_size": len(found_items),
                 "hint": (
                     f"Found {len(found_items)} items related to {related_to} "
-                    f"(scanned {total_fetched} items, max {MAX_TOTAL_ITEMS}). "
+                    f"(scanned {total_fetched} items, max {self._SCAN_MAX_TOTAL_ITEMS}). "
                     "To search more items, add name_keyword, status, or priority filters."
                 ),
             }
@@ -2060,6 +2162,41 @@ class WorkItemProvider(Provider):
                     "will filter results after retrieval"
                 )
 
+            # 1. 获取该类型的所有字段映射 (Name -> Key)
+            # 这利用了 MetadataManager 的缓存机制，避免多次 API 调用
+            try:
+                all_fields_map = await self.meta.list_fields(project_key, type_key)
+            except Exception as e:
+                logger.warning("Filter API: Failed to list fields: %s", e)
+                all_fields_map = {}
+
+            # 定义业务逻辑需要的基础字段
+            # 这些是代码逻辑依赖的字段（用于客户端过滤），无论用户是否传入过滤参数都需要获取
+            needed_fields = {"priority", "status", "owner"}
+
+            # 3. 解析字段 Key
+            fields_to_fetch = []
+
+            for name in needed_fields:
+                # 优先尝试从全量 Map 中直接获取 (最快，O(1))
+                if name in all_fields_map:
+                    fields_to_fetch.append(all_fields_map[name])
+                else:
+                    # 如果 Map 中没有（例如字段名是中文 "优先级" 但我们需要 "priority"），
+                    # 则委托给 MetadataManager 进行智能解析（支持模糊匹配、别名查找等）
+                    try:
+                        key = await self.meta.get_field_key(project_key, type_key, name)
+                        fields_to_fetch.append(key)
+                    except Exception as e:
+                        # 某些非关键字段如果找不到，可以忽略，不影响整体流程
+                        logger.debug(
+                            "Filter API: Optional field '%s' not found: %s", name, e
+                        )
+
+            if fields_to_fetch:
+                # 去重并赋值
+                filter_kwargs["fields"] = list(set(fields_to_fetch))
+
             result = await self.api.filter(
                 project_key=project_key,
                 work_item_type_keys=[type_key],
@@ -2068,35 +2205,8 @@ class WorkItemProvider(Provider):
                 **filter_kwargs,
             )
 
-            # 标准化返回结果
-            if isinstance(result, list):
-                items = result
-                pagination = {
-                    "total": len(result),
-                    "page_num": page_num,
-                    "page_size": page_size,
-                }
-                logger.debug("API returned list format, converted to standard format")
-            elif isinstance(result, dict):
-                items = result.get("work_items", [])
-                pagination = result.get("pagination", {})
-                # 如果 pagination 不是字典，创建默认的
-                if not isinstance(pagination, dict):
-                    pagination = {
-                        "total": result.get("total", len(items)),
-                        "page_num": page_num,
-                        "page_size": page_size,
-                    }
-            else:
-                logger.warning(
-                    f"Unexpected result type: {type(result)}, value: {result}"
-                )
-                items = []
-                pagination = {
-                    "total": 0,
-                    "page_num": page_num,
-                    "page_size": page_size,
-                }
+            # 使用辅助方法标准化返回结果
+            items, pagination = self._normalize_api_result(result, page_num, page_size)
 
             # 如果 filter API 不支持某些条件，在结果中进一步筛选
             if priority or owner or related_to:
@@ -2122,33 +2232,20 @@ class WorkItemProvider(Provider):
                             logger.debug("Failed to filter by owner '%s': %s", owner, e)
                             # 如果无法解析 owner，跳过该过滤条件
 
-                    # 检查关联工作项
-                    if related_to:
-                        is_related = False
-                        fields = item.get("fields", [])
-                        for field in fields:
-                            field_value = field.get("field_value")
-                            # 检查字段值是否包含目标工作项 ID
-                            if field_value:
-                                if isinstance(field_value, list):
-                                    if related_to in field_value:
-                                        is_related = True
-                                        break
-                                elif field_value == related_to:
-                                    is_related = True
-                                    break
-                        if not is_related:
-                            continue
+                    # 使用辅助方法检查关联工作项
+                    if related_to and not self._is_item_related_to(item, related_to):
+                        continue
 
                     filtered_items.append(item)
 
                 items = filtered_items
                 logger.info(
-                    f"Filtered results: {len(items)} items after priority/owner/related_to filtering"
+                    "Filtered results: %d items after priority/owner/related_to filtering",
+                    len(items),
                 )
 
             logger.info(
-                f"Retrieved {len(items)} items (total: {pagination.get('total', 0)})"
+                "Retrieved %d items (total: %d)", len(items), pagination.get("total", 0)
             )
 
             return {
@@ -2226,32 +2323,10 @@ class WorkItemProvider(Provider):
         if owner:
             try:
                 user_key = await self.meta.get_user_key(owner)
-
-                # 动态解析负责人字段 Key
-                # 尝试顺序: "owner" -> "当前负责人" -> "负责人" -> "经办人" -> "Assignee"
-                owner_field_key = "owner"  # 默认值
-                candidate_names = [
-                    "owner",
-                    "当前负责人",
-                    "负责人",
-                    "经办人",
-                    "Assignee",
-                ]
-
-                for candidate in candidate_names:
-                    try:
-                        key = await self.meta.get_field_key(
-                            project_key, type_key, candidate
-                        )
-                        if key:
-                            owner_field_key = key
-                            logger.debug(
-                                "Resolved owner field key to: %s ('%s')", key, candidate
-                            )
-                            break
-                    except Exception:
-                        continue
-
+                # 使用辅助方法动态解析负责人字段 Key
+                owner_field_key = await self._resolve_owner_field_key(
+                    project_key, type_key
+                )
                 conditions.append(
                     {
                         "field_key": owner_field_key,
@@ -2275,7 +2350,10 @@ class WorkItemProvider(Provider):
         }
 
         logger.info(
-            f"Querying tasks with {len(conditions)} conditions, page_num={page_num}, page_size={page_size}"
+            "Querying tasks with %d conditions, page_num=%d, page_size=%d",
+            len(conditions),
+            page_num,
+            page_size,
         )
         logger.debug("get_tasks: Built search_group: %s", search_group)
 
@@ -2303,49 +2381,22 @@ class WorkItemProvider(Provider):
             fields=fields_to_fetch if fields_to_fetch else None,
         )
 
-        # 标准化返回结果
-        # 处理 API 可能返回列表或字典的情况
-        if isinstance(result, list):
-            items = result
-            pagination = {
-                "total": len(result),
-                "page_num": page_num,
-                "page_size": page_size,
-            }
-            logger.debug("API returned list format, converted to standard format")
-        else:
-            items = result.get("work_items", [])
-            pagination = result.get("pagination", {})
+        # 使用辅助方法标准化返回结果
+        items, pagination = self._normalize_api_result(result, page_num, page_size)
 
         logger.info(
             "Retrieved %d items (total: %d)", len(items), pagination.get("total", 0)
         )
 
-        # 如果指定了 related_to，进行客户端过滤
+        # 如果指定了 related_to，使用辅助方法进行客户端过滤
         # search_params API 不支持关联字段过滤
         if related_to:
             logger.info("Applying client-side related_to filter: %s", related_to)
-            filtered_items = []
-            for item in items:
-                is_related = False
-                fields = item.get("fields", [])
-                for field in fields:
-                    field_value = field.get("field_value")
-                    # 检查字段值是否包含目标工作项 ID
-                    if field_value:
-                        if isinstance(field_value, list):
-                            if related_to in field_value:
-                                is_related = True
-                                break
-                        elif field_value == related_to:
-                            is_related = True
-                            break
-                if is_related:
-                    filtered_items.append(item)
-
-            items = filtered_items
+            items = [
+                item for item in items if self._is_item_related_to(item, related_to)
+            ]
             logger.info(
-                f"Filtered results: {len(items)} items after related_to filtering"
+                "Filtered results: %d items after related_to filtering", len(items)
             )
 
         return {
